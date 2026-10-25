@@ -72,6 +72,18 @@ config QCOM_OCMEM
 	  requirements. This is typically used by the GPU, camera/video, and
 	  audio components on some Snapdragon SoCs.
 
+config QCOM_ONEPLUS_SENSOR_DEVINFO
+	tristate "OnePlus sensor device info"
+	depends on QCOM_SMEM
+	depends on ARCH_QCOM || COMPILE_TEST
+	help
+	  Fill the SMEM item that describes the fitted sensor chips for the
+	  sensor DSP of OnePlus devices from the device tree. The DSP firmware
+	  needs it to bring up sensors like the accelerometer. It must be
+	  filled before the sensor DSP is started.
+
+	  Say Y here if you have a OnePlus device with a Qualcomm SoC.
+
 config QCOM_PD_MAPPER
 	tristate "Qualcomm Protection Domain Mapper"
 	select QCOM_QMI_HELPERS
