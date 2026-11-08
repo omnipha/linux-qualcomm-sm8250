@@ -324,12 +324,19 @@ static int oneplus_sensor_devinfo_probe(struct platform_device *pdev)
 	struct oneplus_sensor_devinfo di;
 	struct device *dev = &pdev->dev;
 	size_t size = 0;
-	u32 type;
+	u32 type, n_sources = 0;
 	int ret;
+
+	/* The firmware reads a fixed layout, whatever the size of the item */
+	if (!of_property_read_u32(dev->of_node, "oneplus,sources-per-sensor", &n_sources) &&
+	    n_sources != 2 && n_sources != 3)
+		return dev_err_probe(dev, -EINVAL,
+				     "invalid sources-per-sensor %u\n", n_sources);
 
 	di.info = qcom_smem_get(QCOM_SMEM_HOST_ANY, SMEM_SENSOR, &size);
 	if (PTR_ERR(di.info) == -ENOENT) {
-		ret = qcom_smem_alloc(QCOM_SMEM_HOST_ANY, SMEM_SENSOR, info_size(3));
+		ret = qcom_smem_alloc(QCOM_SMEM_HOST_ANY, SMEM_SENSOR,
+				      info_size(n_sources ?: 3));
 		if (ret && ret != -EEXIST)
 			return dev_err_probe(dev, ret, "failed to allocate SMEM item\n");
 
@@ -338,9 +345,11 @@ static int oneplus_sensor_devinfo_probe(struct platform_device *pdev)
 	if (IS_ERR(di.info))
 		return dev_err_probe(dev, PTR_ERR(di.info), "failed to get SMEM item\n");
 
-	if (size == info_size(3))
+	if (n_sources && size >= info_size(n_sources))
+		di.n_sources = n_sources;
+	else if (!n_sources && size == info_size(3))
 		di.n_sources = 3;
-	else if (size == info_size(2))
+	else if (!n_sources && size == info_size(2))
 		di.n_sources = 2;
 	else
 		return dev_err_probe(dev, -EINVAL, "unexpected SMEM item size %zu\n", size);

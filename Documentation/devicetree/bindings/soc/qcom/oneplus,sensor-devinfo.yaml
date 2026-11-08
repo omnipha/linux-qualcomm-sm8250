@@ -19,6 +19,15 @@ properties:
   compatible:
     const: oneplus,sensor-devinfo
 
+  oneplus,sources-per-sensor:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    enum: [2, 3]
+    description:
+      Number of alternative chips per sensor type in the layout of SMEM item
+      130. Older firmware always reads 2, newer firmware 3, independent of
+      the size of the item. Without this property, the layout follows the
+      size of the item.
+
 patternProperties:
   "^(gsensor|msensor|lsensor|lrsensor|psensor|ssensor|sdsensor|cctsensor|cctrsensor)-[0-9]$":
     type: object
