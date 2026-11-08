@@ -281,6 +281,8 @@
 	/* Values from the vendor device tree overlay of project 19811 */
 	sensor-devinfo {
 		compatible = "oneplus,sensor-devinfo";
+		/* The SLPI firmware reads the layout of older OxygenOS */
+		oneplus,sources-per-sensor = <2>;
 
 		/* LSM6DSM */
 		gsensor-0 {
@@ -306,7 +308,7 @@
 			sensor-type = <2>;
 			sensor-index = <1>;
 			sensor-name = <0x02>;
-			sensor-direction = <0>;
+			sensor-direction = <4>;
 			parameter-number = <18>;
 			soft-mag-parameter = <0x2703 0 0x188 1 0x144 0 0x123 1 0x26db
 					      0 0x1df 0 0x6f 0 0x217 1 0x2b3e 0>;
