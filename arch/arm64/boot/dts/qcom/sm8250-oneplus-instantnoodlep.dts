@@ -281,8 +281,7 @@
 	/* Values from the vendor device tree overlay of project 19811 */
 	sensor-devinfo {
 		compatible = "oneplus,sensor-devinfo";
-		/* The SLPI firmware reads the layout of older OxygenOS */
-		oneplus,sources-per-sensor = <2>;
+		/* The SLPI firmware of this phone reads the 3-source layout */
 
 		/* LSM6DSM */
 		gsensor-0 {
