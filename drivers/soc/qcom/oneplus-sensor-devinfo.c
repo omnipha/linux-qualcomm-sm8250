@@ -29,6 +29,7 @@
 #define ALGO_FEATURE_NUM	5
 #define SENSORS_NUM		11
 #define SENSOR_ALGO_NUM		8
+#define SENSOR_ALGO_NUM_LEGACY	7
 #define SAR_MAX_CH_NUM		5
 #define DEFAULT_CONFIG		0xff
 
@@ -55,12 +56,13 @@ struct sensor_algorithm {
 /*
  * The item contains a magic number, one vector per sensor type with the
  * hardware of each source and one entry per virtual sensor. Older firmware
- * uses 2 sources per sensor, newer firmware 3, which is detected from the
- * size of the item.
+ * uses 2 sources per sensor, newer firmware 3. The older two-source layout
+ * can also omit the last virtual sensor (OPLUS_MEASUREMENT).
  */
 struct oneplus_sensor_devinfo {
 	void *info;
 	unsigned int n_sources;
+	unsigned int n_algorithms;
 };
 
 static size_t vector_size(unsigned int n_sources)
@@ -68,10 +70,10 @@ static size_t vector_size(unsigned int n_sources)
 	return sizeof(s32) + n_sources * sizeof(struct sensor_hw);
 }
 
-static size_t info_size(unsigned int n_sources)
+static size_t info_size(unsigned int n_sources, unsigned int n_algorithms)
 {
 	return sizeof(s32) + SENSORS_NUM * vector_size(n_sources)
-	     + SENSOR_ALGO_NUM * sizeof(struct sensor_algorithm);
+	     + n_algorithms * sizeof(struct sensor_algorithm);
 }
 
 static struct sensor_hw *get_hw(struct oneplus_sensor_devinfo *di,
@@ -336,7 +338,7 @@ static int oneplus_sensor_devinfo_probe(struct platform_device *pdev)
 	di.info = qcom_smem_get(QCOM_SMEM_HOST_ANY, SMEM_SENSOR, &size);
 	if (PTR_ERR(di.info) == -ENOENT) {
 		ret = qcom_smem_alloc(QCOM_SMEM_HOST_ANY, SMEM_SENSOR,
-				      info_size(n_sources ?: 3));
+				      info_size(n_sources ?: 3, SENSOR_ALGO_NUM));
 		if (ret && ret != -EEXIST)
 			return dev_err_probe(dev, ret, "failed to allocate SMEM item\n");
 
@@ -345,14 +347,20 @@ static int oneplus_sensor_devinfo_probe(struct platform_device *pdev)
 	if (IS_ERR(di.info))
 		return dev_err_probe(dev, PTR_ERR(di.info), "failed to get SMEM item\n");
 
-	if (n_sources && size >= info_size(n_sources))
-		di.n_sources = n_sources;
-	else if (!n_sources && size == info_size(3))
-		di.n_sources = 3;
-	else if (!n_sources && size == info_size(2))
+	di.n_algorithms = SENSOR_ALGO_NUM;
+	if ((!n_sources || n_sources == 2) &&
+	    size == info_size(2, SENSOR_ALGO_NUM_LEGACY)) {
 		di.n_sources = 2;
-	else
+		di.n_algorithms = SENSOR_ALGO_NUM_LEGACY;
+	} else if (n_sources && size >= info_size(n_sources, SENSOR_ALGO_NUM)) {
+		di.n_sources = n_sources;
+	} else if (!n_sources && size == info_size(3, SENSOR_ALGO_NUM)) {
+		di.n_sources = 3;
+	} else if (!n_sources && size == info_size(2, SENSOR_ALGO_NUM)) {
+		di.n_sources = 2;
+	} else {
 		return dev_err_probe(dev, -EINVAL, "unexpected SMEM item size %zu\n", size);
+	}
 
 	memset(di.info, 0, size);
 
@@ -362,7 +370,7 @@ static int oneplus_sensor_devinfo_probe(struct platform_device *pdev)
 		if (of_property_read_u32(np, "sensor-type", &type))
 			continue;
 
-		if (is_virtual && type < SENSOR_ALGO_NUM)
+		if (is_virtual && type < di.n_algorithms)
 			parse_virtual(&di, np, type);
 		else if (!is_virtual && type < SENSORS_NUM)
 			parse_physical(&di, np, type);
@@ -370,7 +378,8 @@ static int oneplus_sensor_devinfo_probe(struct platform_device *pdev)
 			dev_warn(dev, "%pOFn: invalid sensor type %u\n", np, type);
 	}
 
-	dev_dbg(dev, "filled SMEM item (%u sources per sensor)\n", di.n_sources);
+	dev_dbg(dev, "filled SMEM item (%u sources per sensor, %u algorithms)\n",
+		di.n_sources, di.n_algorithms);
 
 	return 0;
 }
