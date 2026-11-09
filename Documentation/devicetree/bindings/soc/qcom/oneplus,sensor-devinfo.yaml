@@ -23,10 +23,9 @@ properties:
     $ref: /schemas/types.yaml#/definitions/uint32
     enum: [2, 3]
     description:
-      Number of alternative chips per sensor type in the layout of SMEM item
-      130. Older firmware always reads 2, newer firmware 3, independent of
-      the size of the item. Without this property, the layout follows the
-      size of the item.
+      Number of alternative chips per sensor type when the kernel creates
+      SMEM item 130. Older firmware reads 2, newer firmware 3. An item that
+      the bootloader created keeps its own layout. Defaults to 3.
 
 patternProperties:
   "^(gsensor|msensor|lsensor|lrsensor|psensor|ssensor|sdsensor|cctsensor|cctrsensor)-[0-9]$":
