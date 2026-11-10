@@ -1278,7 +1278,13 @@ static int fastrpc_internal_invoke(struct fastrpc_user *fl,  u32 kernel,
 		if (!wait_for_completion_timeout(&ctx->work, 10 * HZ))
 			err = -ETIMEDOUT;
 	} else {
-		err = wait_for_completion_interruptible(&ctx->work);
+		/*
+		 * Freezable: the freezer otherwise interrupts the wait, the
+		 * system call is restarted on resume and sends the invocation
+		 * a second time while the first one is still pending.
+		 */
+		err = wait_for_completion_state(&ctx->work,
+						TASK_INTERRUPTIBLE | TASK_FREEZABLE);
 	}
 
 	if (err)
