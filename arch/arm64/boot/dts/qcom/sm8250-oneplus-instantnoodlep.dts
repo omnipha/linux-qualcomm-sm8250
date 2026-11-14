@@ -998,7 +998,11 @@
 };
 
 &gpu {
-	status = "disabled";
+	status = "okay";
+
+	zap-shader {
+		firmware-name = "qcom/sm8250/OnePlus/instantnoodlep/a650_zap.mbn";
+	};
 };
 
 &i2c1 {
@@ -1221,6 +1225,11 @@
        status = "okay";
 };
 
+&pon {
+	mode-bootloader = <0x02>;
+	mode-recovery = <0x01>;
+};
+
 &pon_pwrkey {
 	status = "okay";
 };
@@ -1228,6 +1237,10 @@
 &pon_resin {
 	linux,code = <KEY_VOLUMEDOWN>;
 	status = "okay";
+};
+
+&pm8009_pon {
+	status = "disabled";
 };
 
 &qup_spi4_cs_gpio {
