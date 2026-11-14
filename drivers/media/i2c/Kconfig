@@ -287,6 +287,46 @@ config VIDEO_IMX415
 	  To compile this driver as a module, choose M here: the
 	  module will be called imx415.
 
+config VIDEO_IMX471
+	tristate "Sony IMX471 sensor support"
+	select V4L2_CCI_I2C
+	help
+	  This is a Video4Linux2 sensor driver for the Sony
+	  IMX471 camera.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called imx471.
+
+config VIDEO_IMX586
+	tristate "Sony IMX586 sensor support"
+	select V4L2_CCI_I2C
+	help
+	  This is a Video4Linux2 sensor driver for the Sony
+	  IMX586 camera.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called imx586.
+
+config VIDEO_GC5035
+	tristate "GalaxyCore GC5035 sensor support"
+	select V4L2_CCI_I2C
+	help
+	  This is a Video4Linux2 sensor driver for the GalaxyCore
+	  GC5035 camera.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called gc5035.
+
+config VIDEO_IMX689
+	tristate "Sony IMX689 sensor support"
+	select V4L2_CCI_I2C
+	help
+	  This is a Video4Linux2 sensor driver for the Sony
+	  IMX689 camera.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called imx689.
+
 config VIDEO_MAX9271_LIB
 	tristate
 
@@ -923,6 +963,15 @@ config VIDEO_DW9807_VCM
 	help
 	  This is a driver for the DW9807 camera lens voice coil.
 	  DW9807 is a 10 bit DAC with 100mA output current sink
+	  capability. This is designed for linear control of
+	  voice coil motors, controlled via I2C serial interface.
+
+config VIDEO_LC898217XC
+	tristate "LC898217XC lens voice coil support"
+	select V4L2_CCI_I2C
+	help
+	  This is a driver for the LC898217XC camera lens voice coil.
+	  LC898217XC is a 11 bit DAC with 110mA output current sink
 	  capability. This is designed for linear control of
 	  voice coil motors, controlled via I2C serial interface.
 
