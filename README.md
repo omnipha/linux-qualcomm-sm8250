@@ -44,7 +44,7 @@ make O=out ARCH=arm64 LLVM=1 dtbs
 
 Output: `out/arch/arm64/boot/dts/qcom/sm8250-oneplus-instantnoodlep.dtb`.
 
-The configuration starts from the pinned postmarketOS SM8250 configuration and enables the added panel and camera drivers as modules. A complete kernel build is:
+The configuration starts from the pinned postmarketOS SM8250 configuration. It builds the OnePlus panel driver into the kernel and enables the camera sensor and focus drivers as modules. A complete kernel build is:
 
 ```sh
 make -j"$(nproc)" O=out ARCH=arm64 LLVM=1 Image modules dtbs
