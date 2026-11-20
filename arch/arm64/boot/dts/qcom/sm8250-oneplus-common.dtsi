@@ -38,6 +38,42 @@
 /delete-node/ &spss_mem;
 /delete-node/ &cdsp_secure_heap;
 
+/*
+ * PM8150 SDAM2 (SID 0, 0xb100) is free to use on these boards: the
+ * downstream OnePlus kernel declares the block but only its two consumers,
+ * pm8150b_fg "fg_sdam" (QG) and the pm8150b_hr_led tri-led "pbs_sdam",
+ * are wired to boards that are not enabled on this tree (mainline uses a
+ * ti,bq27411 fuel gauge, pm8150b_fg is disabled and there is no tri-led
+ * node), and measured SDAM2 has no QG data written (SDAM_VALID at 0x46 is
+ * 0). Use the block to persist the RTC offset, as a 4-byte "rtc-offset"
+ * cell at 0xbc, following the upstream sc8280xp-crd SDAM precedent.
+ *
+ * The wiring lives here, not in upstream pm8150.dtsi, because upstream
+ * does not carry this SDAM node (rule: keep whole wiring in the OnePlus
+ * include); that also lets other SM8250 devices override or disable it if
+ * their firmware claims the block. This SDAM choice is verified on
+ * OnePlus 8 Pro (MB005) only -- other SM8250 devices need per-device
+ * verification that their firmware does not claim 0xb100.
+ */
+&pm8150_0 {
+	rtc@6000 {
+		nvmem-cells = <&rtc_offset>;
+		nvmem-cell-names = "offset";
+	};
+
+	pm8150_sdam_2: nvram@b100 {
+		compatible = "qcom,spmi-sdam";
+		reg = <0xb100>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0 0xb100 0x100>;
+
+		rtc_offset: rtc-offset@bc {
+			reg = <0xbc 0x4>;
+		};
+	};
+};
+
 / {
 	chassis-type = "handset";
 	qcom,msm-id = <QCOM_ID_SM8250 0x10000>,
