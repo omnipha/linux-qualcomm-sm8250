@@ -12,6 +12,7 @@
 #include <linux/device.h>
 #include <linux/mhi.h>
 #include <linux/module.h>
+#include <linux/of.h>
 #include <linux/pci.h>
 #include <linux/pm_runtime.h>
 #include <linux/timer.h>
@@ -165,7 +166,42 @@ struct mhi_pci_dev_info {
 		.lpm_notify = false,			\
 		.offload_channel = false,		\
 		.doorbell_mode_switch = false,		\
-	}
+	}						\
+
+/*
+ * The SAHARA channels of a flashless SDX55 have to be usable in the SBL as
+ * well as in the AMSS execution environment: the modem keeps using them
+ * after it has switched over to mission mode.
+ */
+#define MHI_CHANNEL_CONFIG_UL_SBL_AMSS(ch_num, ch_name, el_count, ev_ring) \
+	{						\
+		.num = ch_num,				\
+		.name = ch_name,			\
+		.num_elements = el_count,		\
+		.event_ring = ev_ring,			\
+		.dir = DMA_TO_DEVICE,			\
+		.ee_mask = BIT(MHI_EE_SBL) | BIT(MHI_EE_AMSS),	\
+		.pollcfg = 0,				\
+		.doorbell = MHI_DB_BRST_DISABLE,	\
+		.lpm_notify = false,			\
+		.offload_channel = false,		\
+		.doorbell_mode_switch = false,		\
+	}						\
+
+#define MHI_CHANNEL_CONFIG_DL_SBL_AMSS(ch_num, ch_name, el_count, ev_ring) \
+	{						\
+		.num = ch_num,				\
+		.name = ch_name,			\
+		.num_elements = el_count,		\
+		.event_ring = ev_ring,			\
+		.dir = DMA_FROM_DEVICE,			\
+		.ee_mask = BIT(MHI_EE_SBL) | BIT(MHI_EE_AMSS),	\
+		.pollcfg = 0,				\
+		.doorbell = MHI_DB_BRST_DISABLE,	\
+		.lpm_notify = false,			\
+		.offload_channel = false,		\
+		.doorbell_mode_switch = false,		\
+	}						\
 
 #define MHI_CHANNEL_CONFIG_UL_FP(ch_num, ch_name, el_count, ev_ring) \
 	{						\
@@ -409,6 +445,78 @@ static const struct mhi_pci_dev_info mhi_qcom_sdx55_info = {
 	.edl = "qcom/sdx55m/edl.mbn",
 	.edl_trigger = true,
 	.config = &modem_qcom_v1_mhiv_config,
+	.bar_num = MHI_PCI_DEFAULT_BAR_NUM,
+	.dma_data_width = 32,
+	.mru_default = 32768,
+	.sideband_wake = false,
+};
+
+static const struct mhi_channel_config modem_qcom_sdx55_flashless_channels[] = {
+	/* A whole Sahara READ_DATA response is queued as one chained transfer */
+	MHI_CHANNEL_CONFIG_UL_SBL_AMSS(2, "SAHARA", 128, 0),
+	MHI_CHANNEL_CONFIG_DL_SBL_AMSS(3, "SAHARA", 32, 0),
+	MHI_CHANNEL_CONFIG_UL(4, "DIAG", 16, 1),
+	MHI_CHANNEL_CONFIG_DL(5, "DIAG", 16, 1),
+	MHI_CHANNEL_CONFIG_UL(12, "MBIM", 4, 0),
+	MHI_CHANNEL_CONFIG_DL(13, "MBIM", 4, 0),
+	MHI_CHANNEL_CONFIG_UL(14, "QMI", 4, 0),
+	MHI_CHANNEL_CONFIG_DL(15, "QMI", 4, 0),
+	MHI_CHANNEL_CONFIG_UL(20, "IPCR", 8, 0),
+	MHI_CHANNEL_CONFIG_DL(21, "IPCR", 8, 0),
+	MHI_CHANNEL_CONFIG_UL(46, "IP_SW0", 64, 2),
+	MHI_CHANNEL_CONFIG_DL(47, "IP_SW0", 64, 3),
+	/*
+	 * With burst mode the downlink stalls under load on this modem, so the
+	 * hardware channels keep the doorbell burst disabled.
+	 */
+	{
+		.num = 100,
+		.name = "IP_HW0",
+		.num_elements = 128,
+		.event_ring = 4,
+		.dir = DMA_TO_DEVICE,
+		.ee_mask = BIT(MHI_EE_AMSS),
+		.pollcfg = 0,
+		.doorbell = MHI_DB_BRST_DISABLE,
+		.lpm_notify = false,
+		.offload_channel = false,
+		.doorbell_mode_switch = false,
+	},
+	{
+		.num = 101,
+		.name = "IP_HW0",
+		.num_elements = 128,
+		.event_ring = 5,
+		.dir = DMA_FROM_DEVICE,
+		.ee_mask = BIT(MHI_EE_AMSS),
+		.pollcfg = 0,
+		.doorbell = MHI_DB_BRST_DISABLE,
+		.lpm_notify = false,
+		.offload_channel = false,
+		.doorbell_mode_switch = false,
+	},
+};
+
+static const struct mhi_controller_config modem_qcom_sdx55_flashless_config = {
+	.max_channels = 128,
+	.timeout_ms = 20000,
+	.num_channels = ARRAY_SIZE(modem_qcom_sdx55_flashless_channels),
+	.ch_cfg = modem_qcom_sdx55_flashless_channels,
+	.num_events = ARRAY_SIZE(modem_qcom_v1_mhi_events),
+	.event_cfg = modem_qcom_v1_mhi_events,
+};
+
+/*
+ * SDX55 without flash, as soldered on some phones: the SBL is loaded over BHI,
+ * the remaining images are requested over Sahara (see MHI_BUS_SAHARA). The
+ * device is selected by the qcom,flashless property of its device tree node,
+ * so that a modem with the same PCI IDs but a working flash keeps its own
+ * profile.
+ */
+static const struct mhi_pci_dev_info mhi_qcom_sdx55_flashless_info = {
+	.name = "qcom-sdx55m-flashless",
+	.fw = "qcom/sdx55m/sbl1.mbn",
+	.config = &modem_qcom_sdx55_flashless_config,
 	.bar_num = MHI_PCI_DEFAULT_BAR_NUM,
 	.dma_data_width = 32,
 	.mru_default = 32768,
@@ -962,15 +1070,11 @@ static const struct pci_device_id mhi_pci_id_table[] = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_QCOM, 0x0304),
 		.driver_data = (kernel_ulong_t) &mhi_qcom_sdx24_info },
 	/*
-	 * OnePlus 8 Pro (SM8250) integrated SDX55M. Despite the Foxconn-style
-	 * subsystem IDs, this is a Qualcomm OEM module: it boots the stock
-	 * qcom/sdx55m/sbl1.mbn SBL (see modem_a partition) and uses the
-	 * Qualcomm channel set (DIAG, QMI, IPCR, IP_HW0), so match it to the
-	 * qcom-sdx55m data. The Foxconn entry below is kept for the SC8280XP
-	 * CRD but is shadowed here for this subsystem.
+	 * The OnePlus 8 Pro (SM8250) SDX55M has the same PCI IDs as the
+	 * Foxconn SDX55, but it is a flashless module: it needs the SBL and
+	 * the Sahara image loader, not the Foxconn EDL profile. The devicetree
+	 * tells the two apart, see mhi_pci_probe().
 	 */
-	{ PCI_DEVICE_SUB(PCI_VENDOR_ID_QCOM, 0x0306, PCI_VENDOR_ID_QCOM, 0x010c),
-		.driver_data = (kernel_ulong_t) &mhi_qcom_sdx55_info },
 	{ PCI_DEVICE_SUB(PCI_VENDOR_ID_QCOM, 0x0306, PCI_VENDOR_ID_QCOM, 0x010c),
 		.driver_data = (kernel_ulong_t) &mhi_foxconn_sdx55_info },
 	/* EM919x (sdx55), use the same vid:pid as qcom-sdx55m */
@@ -1376,6 +1480,15 @@ static int mhi_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	struct mhi_controller *mhi_cntrl;
 	unsigned int dma_data_width;
 	int err;
+
+	/*
+	 * The flashless SDX55 of the OnePlus 8 Pro reports the same subsystem
+	 * ID as a Foxconn module that boots from its own flash. The devicetree
+	 * tells them apart.
+	 */
+	if (pdev->device == 0x0306 &&
+	    of_property_read_bool(pdev->dev.of_node, "qcom,flashless"))
+		info = &mhi_qcom_sdx55_flashless_info;
 
 	dev_info(&pdev->dev, "MHI PCI device found: %s\n", info->name);
 

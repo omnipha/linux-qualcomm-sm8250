@@ -21,6 +21,14 @@ config MHI_BUS_DEBUG
 	  reading and/or modifying some values within the MHI controller
 	  for debug and test purposes.
 
+config MHI_BUS_SAHARA
+	tristate "Sahara image loader for flashless MHI modems"
+	depends on MHI_BUS
+	help
+	  Serves the firmware images a flashless modem (such as the SDX55 of
+	  the OnePlus 8 Pro) requests over the Sahara protocol on the MHI
+	  SAHARA channel after its boot loader has started.
+
 config MHI_BUS_PCI_GENERIC
 	tristate "MHI PCI controller driver"
 	depends on MHI_BUS

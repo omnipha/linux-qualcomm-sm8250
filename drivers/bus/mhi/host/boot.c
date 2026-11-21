@@ -536,6 +536,8 @@ void mhi_fw_load_handler(struct mhi_controller *mhi_cntrl)
 	fw_data = firmware->data;
 	fw_sz = firmware->size;
 
+	dev_info(dev, "Loaded firmware %s (%zu bytes)\n", fw_name, firmware->size);
+
 skip_req_fw:
 	fw_load_type = mhi_fw_load_type_get(mhi_cntrl);
 	if (fw_load_type == MHI_FW_LOAD_BHIE)
@@ -551,6 +553,9 @@ skip_req_fw:
 		release_firmware(firmware);
 		goto error_fw_load;
 	}
+
+	dev_info(dev, "MHI loaded image over BHI%s\n",
+		 fw_load_type == MHI_FW_LOAD_BHIE ? "e" : "");
 
 	/* Wait for ready since EDL image was loaded */
 	if (fw_name && fw_name == mhi_cntrl->edl_image) {

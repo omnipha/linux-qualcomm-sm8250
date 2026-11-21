@@ -824,6 +824,8 @@ void mhi_pm_st_worker(struct work_struct *work)
 			write_lock_irq(&mhi_cntrl->pm_lock);
 			mhi_cntrl->ee = MHI_EE_SBL;
 			write_unlock_irq(&mhi_cntrl->pm_lock);
+			dev_info(mhi_cntrl->cntrl_dev,
+				 "Device transitioned to the SBL execution environment\n");
 			/*
 			 * The MHI devices are only created when the client
 			 * device switches its Execution Environment (EE) to
@@ -1159,8 +1161,8 @@ int mhi_async_power_up(struct mhi_controller *mhi_cntrl)
 	}
 
 	state = mhi_get_mhi_state(mhi_cntrl);
-	dev_dbg(dev, "Attempting power on with EE: %s, state: %s\n",
-		TO_MHI_EXEC_STR(current_ee), mhi_state_str(state));
+	dev_info(dev, "Attempting power on with EE: %s, state: %s\n",
+		 TO_MHI_EXEC_STR(current_ee), mhi_state_str(state));
 
 	if (state == MHI_STATE_SYS_ERR) {
 		mhi_set_mhi_state(mhi_cntrl, MHI_STATE_RESET);

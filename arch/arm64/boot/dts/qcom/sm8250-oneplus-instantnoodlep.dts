@@ -1186,6 +1186,15 @@
 
 &pcie2 {
 	status = "okay";
+
+	pcie@0 {
+		/* SDX55 modem, without flash: firmware is loaded by the host */
+		modem@0,0 {
+			compatible = "pci17cb,0306";
+			reg = <0x10000 0x0 0x0 0x0 0x0>;
+			qcom,flashless;
+		};
+	};
 };
 
 &pcie2_phy {

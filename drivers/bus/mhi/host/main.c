@@ -426,6 +426,9 @@ void mhi_create_devices(struct mhi_controller *mhi_cntrl)
 		ret = device_add(&mhi_dev->dev);
 		if (ret)
 			put_device(&mhi_dev->dev);
+		else
+			dev_info(dev, "Created MHI device %s\n",
+				 mhi_dev->name);
 	}
 }
 
@@ -895,8 +898,8 @@ int mhi_process_ctrl_ev_ring(struct mhi_controller *mhi_cntrl,
 			enum dev_st_transition st = DEV_ST_TRANSITION_MAX;
 			enum mhi_ee_type event = MHI_TRE_GET_EV_EXECENV(local_rp);
 
-			dev_dbg(dev, "Received EE event: %s\n",
-				TO_MHI_EXEC_STR(event));
+			dev_info(dev, "Received EE event: %s\n",
+				 TO_MHI_EXEC_STR(event));
 			switch (event) {
 			case MHI_EE_SBL:
 				st = DEV_ST_TRANSITION_SBL;
