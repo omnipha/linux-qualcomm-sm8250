@@ -23,7 +23,7 @@ Everything below was measured on **one OnePlus 8 Pro IN2023 (`instantnoodlep`)**
 
 - GPU devfreq thermal cooling is not enabled: [#1](https://github.com/omnipha/linux-qualcomm-sm8250/issues/1).
 - Per-task I/O accounting is disabled, so `/proc/self/io` is unavailable: [#2](https://github.com/omnipha/linux-qualcomm-sm8250/issues/2).
-- The RTC cannot store time; `hwclock --systohc` fails with `ENODEV`: [#3](https://github.com/omnipha/linux-qualcomm-sm8250/issues/3).
+- The RTC cannot store time on this kernel; `hwclock --systohc` fails with `ENODEV`. A source fix (PM8150 SDAM2 offset cell, `CONFIG_NVMEM_SPMI_SDAM=y`) was merged in `7e5c7b1ce280` on 2026-11-20 and [#3](https://github.com/omnipha/linux-qualcomm-sm8250/issues/3) is closed; on-device verification still requires flashing the new DTB.
 - The SDX55M modem on PCIe (`17cb:0306` / `17cb:010c`) does not boot; no SBL firmware for subsystem `17cb:010c`, WWAN disabled: [#4](https://github.com/omnipha/linux-qualcomm-sm8250/issues/4).
 
 ## Not verified
