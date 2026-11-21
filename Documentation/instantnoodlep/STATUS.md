@@ -22,7 +22,7 @@ Everything below was measured on **one OnePlus 8 Pro IN2023 (`instantnoodlep`)**
 ## Known open issues
 
 - GPU devfreq thermal cooling was disabled in the kernel config; a source fix (`CONFIG_DEVFREQ_THERMAL=y`) was merged in `8cd047b96e1e` on 2026-11-21 and [#1](https://github.com/omnipha/linux-qualcomm-sm8250/issues/1) is closed; on-device verification still requires flashing the new kernel.
-- Per-task I/O accounting is disabled, so `/proc/self/io` is unavailable: [#2](https://github.com/omnipha/linux-qualcomm-sm8250/issues/2).
+- Per-task I/O accounting was disabled in the kernel config, so `/proc/self/io` was unavailable; a source fix (`CONFIG_TASKSTATS=y`, `CONFIG_TASK_XACCT=y`, `CONFIG_TASK_IO_ACCOUNTING=y`) was merged in `9763e16ad036` on 2026-11-21 and [#2](https://github.com/omnipha/linux-qualcomm-sm8250/issues/2) is closed; on-device verification still requires flashing the new kernel.
 - The RTC cannot store time on this kernel; `hwclock --systohc` fails with `ENODEV`. A source fix (PM8150 SDAM2 offset cell, `CONFIG_NVMEM_SPMI_SDAM=y`) was merged in `7e5c7b1ce280` on 2026-11-20 and [#3](https://github.com/omnipha/linux-qualcomm-sm8250/issues/3) is closed; on-device verification still requires flashing the new DTB.
 - The SDX55M modem on PCIe (`17cb:0306` / `17cb:010c`) does not boot; no SBL firmware for subsystem `17cb:010c`, WWAN disabled: [#4](https://github.com/omnipha/linux-qualcomm-sm8250/issues/4).
 
