@@ -961,6 +961,16 @@ static const struct pci_device_id mhi_pci_id_table[] = {
 		.driver_data = (kernel_ulong_t) &mhi_qcom_sdx35_info },
 	{ PCI_DEVICE(PCI_VENDOR_ID_QCOM, 0x0304),
 		.driver_data = (kernel_ulong_t) &mhi_qcom_sdx24_info },
+	/*
+	 * OnePlus 8 Pro (SM8250) integrated SDX55M. Despite the Foxconn-style
+	 * subsystem IDs, this is a Qualcomm OEM module: it boots the stock
+	 * qcom/sdx55m/sbl1.mbn SBL (see modem_a partition) and uses the
+	 * Qualcomm channel set (DIAG, QMI, IPCR, IP_HW0), so match it to the
+	 * qcom-sdx55m data. The Foxconn entry below is kept for the SC8280XP
+	 * CRD but is shadowed here for this subsystem.
+	 */
+	{ PCI_DEVICE_SUB(PCI_VENDOR_ID_QCOM, 0x0306, PCI_VENDOR_ID_QCOM, 0x010c),
+		.driver_data = (kernel_ulong_t) &mhi_qcom_sdx55_info },
 	{ PCI_DEVICE_SUB(PCI_VENDOR_ID_QCOM, 0x0306, PCI_VENDOR_ID_QCOM, 0x010c),
 		.driver_data = (kernel_ulong_t) &mhi_foxconn_sdx55_info },
 	/* EM919x (sdx55), use the same vid:pid as qcom-sdx55m */
