@@ -1247,6 +1247,8 @@ patternProperties:
     description: OpenRISC.io
   "^openwrt,.*":
     description: OpenWrt
+  "^oppo,.*":
+    description: OPPO Mobile Telecommunications Corp., Ltd.
   "^option,.*":
     description: Option NV
   "^oranth,.*":
