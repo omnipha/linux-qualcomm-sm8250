@@ -50,6 +50,15 @@
  * whole ELF segment at a time; larger requests are sent in several batches.
  */
 #define SAHARA_TRANSFER_MAX_SIZE	0x800000
+/*
+ * Number of buffers of one batch of a READ_DATA response. 16 buffers are
+ * about 1 MB at the transport MTU, the batch cap of the reference port for
+ * the SDX55. A diagnostic build with this cap transferred all images the
+ * SDX55M asked for on a flashless device. The cap applies to every device
+ * served by this channel, it does not change the protocol: the last buffer
+ * of a batch still ends the response with an EOT.
+ */
+#define SAHARA_BATCH_MAX_BUFS		16
 #define SAHARA_READ_MAX_SIZE		0xfff0U /* Avoid unaligned requests */
 #define SAHARA_NUM_TX_BUF		DIV_ROUND_UP(SAHARA_TRANSFER_MAX_SIZE,\
 							SAHARA_PACKET_MAX_SIZE)
@@ -68,6 +77,7 @@
 #define SAHARA_READ_DATA_LENGTH		0x14
 #define SAHARA_END_OF_IMAGE_LENGTH	0x10
 #define SAHARA_DONE_LENGTH		0x8
+#define SAHARA_DONE_RESP_LENGTH		0xc
 #define SAHARA_RESET_LENGTH		0x8
 #define SAHARA_MEM_DEBUG_LENGTH		0x10
 #define SAHARA_MEM_READ_LENGTH		0x10
@@ -109,6 +119,9 @@ struct sahara_packet {
 			__le32 image;
 			__le32 status;
 		} end_of_image;
+		struct {
+			__le32 status;
+		} done_resp;
 		struct {
 			__le32 table_address;
 			__le32 table_length;
@@ -175,7 +188,9 @@ struct sahara_context {
 	u32				read_data_offset;
 	u32				read_data_length;
 	atomic_t			tx_done;
+	atomic_t			tx_bytes;
 	unsigned int			tx_batch;
+	atomic_t			tx_queued;
 	unsigned int			cmd_mode_entries;
 	bool				is_mem_dump_mode;
 	bool				mem32;
@@ -284,6 +299,9 @@ static void sahara_hello(struct sahara_context *context)
 		le32_to_cpu(context->rx->hello.max_length),
 		le32_to_cpu(context->rx->hello.mode));
 
+	dev_info(&context->mhi_dev->dev, "hello max_length %u\n",
+		 le32_to_cpu(context->rx->hello.max_length));
+
 	if (le32_to_cpu(context->rx->length) != SAHARA_HELLO_LENGTH) {
 		dev_err(&context->mhi_dev->dev, "Malformed hello packet - length %d\n",
 			le32_to_cpu(context->rx->length));
@@ -390,9 +408,17 @@ static int read_data_helper(struct sahara_context *context, int buf_index,
 	else
 		mhi_flag = MHI_CHAIN;
 
+	/*
+	 * Account the buffer before it is visible to the device: the
+	 * completion callback may run on another CPU as soon as the
+	 * descriptor is queued.
+	 */
+	atomic_add(pkt_data_len, &context->tx_queued);
+
 	ret = mhi_queue_buf(context->mhi_dev, DMA_TO_DEVICE,
 			    context->tx[buf_index], pkt_data_len, mhi_flag);
 	if (ret) {
+		atomic_sub(pkt_data_len, &context->tx_queued);
 		dev_err(&context->mhi_dev->dev, "Unable to send read_data response %d\n", ret);
 		return ret;
 	}
@@ -411,6 +437,7 @@ static void sahara_send_batch(struct sahara_context *context)
 
 	n = min_t(unsigned int, SAHARA_NUM_TX_BUF,
 		  DIV_ROUND_UP(context->read_data_length, SAHARA_PACKET_MAX_SIZE));
+	n = min_t(unsigned int, n, SAHARA_BATCH_MAX_BUFS);
 	/* A batch must fit into the transfer ring */
 	n = min_t(unsigned int, n,
 		  mhi_get_free_desc_count(context->mhi_dev, DMA_TO_DEVICE));
@@ -421,6 +448,12 @@ static void sahara_send_batch(struct sahara_context *context)
 
 	atomic_set(&context->tx_done, 0);
 	context->tx_batch = n;
+	atomic_set(&context->tx_queued, 0);
+
+	dev_info(&context->mhi_dev->dev,
+		 "TEST image%u batch start n=%u offset=%u remaining=%u\n",
+		 context->active_image_id, n, context->read_data_offset,
+		 context->read_data_length);
 
 	for (unsigned int i = 0; i < n; ++i) {
 		if (read_data_helper(context, i, i == n - 1)) {
@@ -451,6 +484,8 @@ static void sahara_read_data(struct sahara_context *context)
 	image_id = le32_to_cpu(context->rx->read_data.image);
 	data_offset = le32_to_cpu(context->rx->read_data.offset);
 	data_len = le32_to_cpu(context->rx->read_data.length);
+	dev_info(&context->mhi_dev->dev, "TEST image%u request offset=%u length=%u\n",
+		 image_id, data_offset, data_len);
 
 	ret = sahara_find_image(context, image_id);
 	if (ret) {
@@ -496,6 +531,17 @@ static void sahara_end_of_image(struct sahara_context *context)
 {
 	int ret;
 
+	/* Diagnostic metadata only; do not read an incomplete response. */
+	if (context->rx_size >= SAHARA_END_OF_IMAGE_LENGTH)
+		dev_info(&context->mhi_dev->dev,
+			 "TEST EOI image=%u status=%u rx_size=%zu packet_len=%u\n",
+			 le32_to_cpu(context->rx->end_of_image.image),
+			 le32_to_cpu(context->rx->end_of_image.status),
+			 context->rx_size, le32_to_cpu(context->rx->length));
+	else
+		dev_info(&context->mhi_dev->dev,
+			 "TEST EOI truncated rx_size=%zu\n", context->rx_size);
+
 	dev_dbg(&context->mhi_dev->dev,
 		"END_OF_IMAGE cmd received. length:%d image:%d status:%d\n",
 		le32_to_cpu(context->rx->length),
@@ -525,6 +571,7 @@ static void sahara_end_of_image(struct sahara_context *context)
 
 	ret = mhi_queue_buf(context->mhi_dev, DMA_TO_DEVICE, context->tx[0],
 			    SAHARA_DONE_LENGTH, MHI_EOT);
+	dev_info(&context->mhi_dev->dev, "TEST DONE queued result=%d\n", ret);
 	if (ret)
 		dev_dbg(&context->mhi_dev->dev, "Unable to send done response %d\n", ret);
 }
@@ -651,7 +698,21 @@ static void sahara_processing(struct work_struct *work)
 		sahara_end_of_image(context);
 		break;
 	case SAHARA_DONE_RESP_CMD:
-		/* Intentional do nothing as we don't need to exit an app */
+		/*
+		 * Diagnostic metadata only. The status field of the done
+		 * response is the image transfer status of the modem: 0 when
+		 * the modem asks for another image (pending), non-zero when
+		 * the modem has received all images it wants (complete).
+		 */
+		if (context->rx_size >= SAHARA_DONE_RESP_LENGTH &&
+		    le32_to_cpu(context->rx->length) >= SAHARA_DONE_RESP_LENGTH)
+			dev_info(&context->mhi_dev->dev,
+				 "TEST DONE_RESP status=%u rx_size=%zu packet_len=%u\n",
+				 le32_to_cpu(context->rx->done_resp.status),
+				 context->rx_size, le32_to_cpu(context->rx->length));
+		else
+			dev_info(&context->mhi_dev->dev,
+				 "TEST DONE_RESP short rx_size=%zu\n", context->rx_size);
 		break;
 	case SAHARA_RESET_RESP_CMD:
 		/* Intentional do nothing as we don't need to exit an app */
@@ -673,6 +734,7 @@ static void sahara_processing(struct work_struct *work)
 
 	ret = mhi_queue_buf(context->mhi_dev, DMA_FROM_DEVICE, context->rx,
 			    SAHARA_PACKET_MAX_SIZE, MHI_EOT);
+	dev_info(&context->mhi_dev->dev, "TEST control RX requeue result=%d\n", ret);
 	if (ret)
 		dev_err(&context->mhi_dev->dev, "Unable to requeue rx buf %d\n", ret);
 }
@@ -939,15 +1001,31 @@ static void sahara_mhi_ul_xfer_cb(struct mhi_device *mhi_dev, struct mhi_result 
 {
 	struct sahara_context *context = dev_get_drvdata(&mhi_dev->dev);
 
+	if (mhi_result->transaction_status)
+		dev_err_ratelimited(&mhi_dev->dev, "TEST UL callback error=%d bytes=%zu\n",
+				    mhi_result->transaction_status, mhi_result->bytes_xferd);
+
 	if (!mhi_result->transaction_status && context->read_data_length && is_streaming(context))
 		schedule_work(&context->read_data_work);
 
 	/* Last buffer of a batch consumed, send the next batch */
-	if (!is_streaming(context) && context->tx_batch &&
-	    atomic_inc_return(&context->tx_done) == context->tx_batch) {
-		context->tx_batch = 0;
-		if (context->read_data_length)
-			schedule_work(&context->read_data_work);
+	if (!is_streaming(context) && context->tx_batch) {
+		u32 image_id = context->active_image_id;
+
+		atomic_add(mhi_result->bytes_xferd, &context->tx_bytes);
+		if (atomic_inc_return(&context->tx_done) == context->tx_batch) {
+			context->tx_batch = 0;
+			dev_info(&mhi_dev->dev,
+				 "TEST image%u batch complete remaining=%u status=%d\n",
+				 image_id, context->read_data_length,
+				 mhi_result->transaction_status);
+			dev_info(&mhi_dev->dev,
+				 "image %u batch: %u bytes queued, %u bytes completed\n",
+				 image_id, (u32)atomic_read(&context->tx_queued),
+				 (u32)atomic_xchg(&context->tx_bytes, 0));
+			if (context->read_data_length)
+				schedule_work(&context->read_data_work);
+		}
 	}
 }
 
@@ -961,8 +1039,11 @@ static void sahara_mhi_dl_xfer_cb(struct mhi_device *mhi_dev, struct mhi_result 
 			schedule_work(&context->dump_work);
 		else
 			schedule_work(&context->fw_work);
+		return;
 	}
 
+	dev_err_ratelimited(&mhi_dev->dev, "TEST DL callback error=%d bytes=%zu\n",
+			    mhi_result->transaction_status, mhi_result->bytes_xferd);
 }
 
 static const struct mhi_device_id sahara_mhi_match_table[] = {
