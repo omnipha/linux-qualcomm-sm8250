@@ -73,6 +73,16 @@
 #define SAHARA_MEM_READ_LENGTH		0x10
 #define SAHARA_MEM_DEBUG64_LENGTH	0x18
 #define SAHARA_MEM_READ64_LENGTH	0x18
+#define SAHARA_CMD_READY_LENGTH		0x8
+#define SAHARA_SWITCH_MODE_LENGTH	0xc
+
+/*
+ * Upper bound for command mode entries without image transfer progress in
+ * between. The host answers every command ready packet with a mode switch
+ * back to the image transfer mode; a modem that keeps asking for the
+ * command mode again would otherwise loop forever.
+ */
+#define SAHARA_MAX_CMD_MODE_ENTRIES	4
 
 struct sahara_packet {
 	__le32 cmd;
@@ -116,6 +126,9 @@ struct sahara_packet {
 			__le64 memory_address;
 			__le64 memory_length;
 		} memory_read64;
+		struct {
+			__le32 mode;
+		} switch_mode;
 	};
 };
 
@@ -164,6 +177,7 @@ struct sahara_context {
 	u32				read_data_length;
 	atomic_t			tx_done;
 	unsigned int			tx_batch;
+	unsigned int			cmd_mode_entries;
 	bool				is_mem_dump_mode;
 	bool				mem32;
 	bool				non_streaming;
@@ -228,6 +242,8 @@ static int sahara_find_image(struct sahara_context *context, u32 image_id)
 	}
 
 	context->active_image_id = image_id;
+	/* Progress: the modem asked for an image, so it is not stuck. */
+	context->cmd_mode_entries = 0;
 	dev_info(&context->mhi_dev->dev, "image %u: %s (%zu bytes)\n", image_id,
 		 context->image_table[image_id], context->firmware->size);
 
@@ -284,12 +300,23 @@ static void sahara_hello(struct sahara_context *context)
 
 	if (le32_to_cpu(context->rx->hello.mode) != SAHARA_MODE_IMAGE_TX_PENDING &&
 	    le32_to_cpu(context->rx->hello.mode) != SAHARA_MODE_IMAGE_TX_COMPLETE &&
-	    le32_to_cpu(context->rx->hello.mode) != SAHARA_MODE_MEMORY_DEBUG) {
+	    le32_to_cpu(context->rx->hello.mode) != SAHARA_MODE_MEMORY_DEBUG &&
+	    le32_to_cpu(context->rx->hello.mode) != SAHARA_MODE_COMMAND) {
 		dev_err(&context->mhi_dev->dev, "Unsupported hello packet - mode %d\n",
 			le32_to_cpu(context->rx->hello.mode));
 		return;
 	}
 
+	/*
+	 * The mode of the hello response tells the modem in which mode it has
+	 * to operate. The reference implementations of the protocol answer a
+	 * hello with the mode that the modem asked for, also with the command
+	 * mode: after that response the modem sends a command ready packet
+	 * (0xB) and waits for client commands from the host. Rejecting the
+	 * command mode instead of answering it leaves the modem waiting: the
+	 * SDX55 SBL announces the command mode after the last image and the
+	 * boot does not continue.
+	 */
 	context->tx[0]->cmd = cpu_to_le32(SAHARA_HELLO_RESP_CMD);
 	context->tx[0]->length = cpu_to_le32(SAHARA_HELLO_LENGTH);
 	context->tx[0]->hello_resp.version = cpu_to_le32(SAHARA_VERSION);
@@ -301,6 +328,51 @@ static void sahara_hello(struct sahara_context *context)
 			    SAHARA_HELLO_LENGTH, MHI_EOT);
 	if (ret)
 		dev_err(&context->mhi_dev->dev, "Unable to send hello response %d\n", ret);
+}
+
+/*
+ * The modem announces that it is ready to execute client commands. The
+ * host answers with a mode switch back to the image transfer mode: the
+ * modem leaves the command mode and issues a new hello packet, so the boot
+ * continues with the image load flow. No client command is executed, so no
+ * calibration or memory content of the modem is read out or changed.
+ */
+static void sahara_command_ready(struct sahara_context *context)
+{
+	int ret;
+
+	if (le32_to_cpu(context->rx->length) != SAHARA_CMD_READY_LENGTH) {
+		dev_err(&context->mhi_dev->dev,
+			"Malformed command ready packet - length %d\n",
+			le32_to_cpu(context->rx->length));
+		return;
+	}
+
+	if (++context->cmd_mode_entries > SAHARA_MAX_CMD_MODE_ENTRIES) {
+		/*
+		 * The modem keeps asking for the command mode without making
+		 * progress. Do not reset it here: the modem re-enters the
+		 * command mode on its own after the last image, so a reset
+		 * would only start the exchange again. Stop switching the
+		 * mode instead and leave the modem in the command mode, where
+		 * it waits for a client command.
+		 */
+		dev_err(&context->mhi_dev->dev,
+			"Modem asks for the command mode too often, staying in it\n");
+		return;
+	}
+
+	dev_info(&context->mhi_dev->dev,
+		 "modem is ready for client commands, returning to image transfer\n");
+
+	context->tx[0]->cmd = cpu_to_le32(SAHARA_SWITCH_MODE_CMD);
+	context->tx[0]->length = cpu_to_le32(SAHARA_SWITCH_MODE_LENGTH);
+	context->tx[0]->switch_mode.mode = cpu_to_le32(SAHARA_MODE_IMAGE_TX_PENDING);
+
+	ret = mhi_queue_buf(context->mhi_dev, DMA_TO_DEVICE, context->tx[0],
+			    SAHARA_SWITCH_MODE_LENGTH, MHI_EOT);
+	if (ret)
+		dev_err(&context->mhi_dev->dev, "Unable to send mode switch %d\n", ret);
 }
 
 static int read_data_helper(struct sahara_context *context, int buf_index,
@@ -595,6 +667,9 @@ static void sahara_processing(struct work_struct *work)
 		break;
 	case SAHARA_MEM_DEBUG_CMD:
 		sahara_memory_debug(context);
+		break;
+	case SAHARA_CMD_READY_CMD:
+		sahara_command_ready(context);
 		break;
 	default:
 		dev_err(&context->mhi_dev->dev, "Unknown command %d\n",
