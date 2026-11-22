@@ -1184,7 +1184,20 @@
 	status = "okay";
 };
 
+&intc {
+	/*
+	 * Message based interrupts for the SDX55 modem on PCIe2: its MSI writes
+	 * are not terminated by the iMSI-RX of the controller. The vendor
+	 * kernel sends them to this SPI range through an alias of the
+	 * distributor that only contains the SPI set/clear registers.
+	 */
+	msi-controller;
+	mbi-ranges = <832 32>;
+	mbi-alias = <0x0 0x17a10000>;
+};
+
 &pcie2 {
+	msi-parent = <&intc>;
 	status = "okay";
 
 	pcie@0 {
