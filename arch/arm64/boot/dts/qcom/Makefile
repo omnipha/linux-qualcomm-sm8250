@@ -359,6 +359,7 @@ dtb-$(CONFIG_ARCH_QCOM) += sm8250-lenovo-q706f.dtb
 dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-mtp.dtb
 dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-oneplus-instantnoodlep.dtb
 dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-oneplus-kebab.dtb
+dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-oppo-cph2207.dtb
 dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-samsung-r8q.dtb
 dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-samsung-x1q.dtb
 dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-sony-xperia-edo-pdx203.dtb

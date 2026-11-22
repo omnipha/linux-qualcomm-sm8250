@@ -1,0 +1,222 @@
+// SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
+/*
+ * OPPO Find X3 Neo (CPH2207 / OP4F0BL1), USB-only bring-up.
+ *
+ * Experimental: never booted on this device.  The original selected DTB 12
+ * and DTBO 26 identify the USB controller, PHYs, RPMh rails and memory
+ * reservations; see issues #8 and #9.  Neither the upstream MTP board nor
+ * the OnePlus tree describes this OPPO board.
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/arm/qcom,ids.h>
+#include "sm8250.dtsi"
+#include "pm8150.dtsi"
+#include "pm8150b.dtsi"
+#include "pm8150l.dtsi"
+
+/* Stock DTB 12 has different reservations than the generic SM8250 map. */
+/delete-node/ &removed_mem;
+/delete-node/ &camera_mem;
+/delete-node/ &wlan_mem;
+/delete-node/ &ipa_fw_mem;
+/delete-node/ &ipa_gsi_mem;
+/delete-node/ &gpu_mem;
+/delete-node/ &npu_mem;
+/delete-node/ &video_mem;
+/delete-node/ &cvp_mem;
+/delete-node/ &cdsp_mem;
+/delete-node/ &slpi_mem;
+/delete-node/ &adsp_mem;
+/delete-node/ &spss_mem;
+/delete-node/ &cdsp_secure_heap;
+
+/ {
+	model = "OPPO Find X3 Neo";
+	compatible = "oppo,cph2207", "qcom,sm8250";
+	chassis-type = "handset";
+
+	/* DTB 12: 0x164/0x20001 and board 0/0. */
+	qcom,msm-id = <QCOM_ID_SM8250 0x20001>;
+	qcom,board-id = <0x0 0x0>;
+
+	/* The stock DT leaves RAM size for the bootloader to supply. */
+	memory@80000000 {
+		device_type = "memory";
+		reg = <0x0 0x80000000 0x0 0x0>;
+	};
+
+	reserved-memory {
+		/* Physical intervals from the selected original DTB. */
+		removed_mem: memory@80b00000 {
+			reg = <0x0 0x80b00000 0x0 0xcd00000>;
+			no-map;
+		};
+
+		camera_mem: memory@8dc00000 {
+			reg = <0x0 0x8dc00000 0x0 0x500000>;
+			no-map;
+		};
+
+		wlan_mem: memory@8e100000 {
+			reg = <0x0 0x8e100000 0x0 0x100000>;
+			no-map;
+		};
+
+		ipa_fw_mem: memory@8e200000 {
+			reg = <0x0 0x8e200000 0x0 0x10000>;
+			no-map;
+		};
+
+		ipa_gsi_mem: memory@8e210000 {
+			reg = <0x0 0x8e210000 0x0 0xa000>;
+			no-map;
+		};
+
+		gpu_mem: memory@8e21a000 {
+			reg = <0x0 0x8e21a000 0x0 0x2000>;
+			no-map;
+		};
+
+		npu_mem: memory@8e300000 {
+			reg = <0x0 0x8e300000 0x0 0x500000>;
+			no-map;
+		};
+
+		video_mem: memory@8e800000 {
+			reg = <0x0 0x8e800000 0x0 0x500000>;
+			no-map;
+		};
+
+		cvp_mem: memory@8ed00000 {
+			reg = <0x0 0x8ed00000 0x0 0x500000>;
+			no-map;
+		};
+
+		cdsp_mem: memory@8f200000 {
+			reg = <0x0 0x8f200000 0x0 0x1400000>;
+			no-map;
+		};
+
+		slpi_mem: memory@90600000 {
+			reg = <0x0 0x90600000 0x0 0x1500000>;
+			no-map;
+		};
+
+		adsp_mem: memory@91b00000 {
+			reg = <0x0 0x91b00000 0x0 0x2500000>;
+			no-map;
+		};
+
+		spss_mem: memory@94000000 {
+			reg = <0x0 0x94000000 0x0 0x100000>;
+			no-map;
+		};
+
+		cdsp_secure_heap: memory@94100000 {
+			reg = <0x0 0x94100000 0x0 0x4600000>;
+			no-map;
+		};
+
+		/* Reserve overlapping stock splash/ramdump regions only once. */
+		memory@9c000000 {
+			reg = <0x0 0x9c000000 0x0 0x2300000>;
+			no-map;
+		};
+
+		memory@9e300000 {
+			reg = <0x0 0x9e300000 0x0 0x100000>;
+			no-map;
+		};
+
+		memory@9fe00000 {
+			reg = <0x0 0x9fe00000 0x0 0x200000>;
+			no-map;
+		};
+
+		ramoops@b0000000 {
+			compatible = "ramoops";
+			reg = <0x0 0xb0000000 0x0 0x400000>;
+			record-size = <0x40000>;
+			console-size = <0x40000>;
+			ftrace-size = <0x40000>;
+			pmsg-size = <0x200000>;
+		};
+	};
+};
+
+/*
+ * The shared SoC definition lacks a size and uses one-cell values for a
+ * two-cell reserved-memory parent. Use the stock ADSP pool's size and
+ * allocation range as a placeholder, but keep the pool disabled until the
+ * mappings for the individual DSPs are implemented and verified.
+ */
+&fastrpc_mem {
+	alloc-ranges = <0x0 0x0 0x0 0xffffffff>;
+	alignment = <0x0 0x400000>;
+	size = <0x0 0xc00000>;
+	status = "disabled";
+};
+
+&apps_rsc {
+	/* Rail identities and output ranges from the stock device tree. */
+	regulators-0 {
+		compatible = "qcom,pm8150-rpmh-regulators";
+		qcom,pmic-id = "a";
+
+		vreg_l2a_3p072: ldo2 {
+			regulator-name = "pm8150_l2";
+			regulator-min-microvolt = <3072000>;
+			regulator-max-microvolt = <3072000>;
+		};
+
+		vreg_l5a_0p88: ldo5 {
+			regulator-name = "pm8150_l5";
+			regulator-min-microvolt = <880000>;
+			regulator-max-microvolt = <880000>;
+		};
+
+		vreg_l12a_1p8: ldo12 {
+			regulator-name = "pm8150_l12";
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+		};
+	};
+};
+
+/*
+ * DTB 12: controller @0xa600000; HS PHY @0x88e3000 is powered by
+ * PM8150 L5/L12/L2.  Start as USB2 peripheral only: the QMP PHY,
+ * PM8150B PD role switch, VBUS boost and extcon wiring remain untested.
+ * Samsung's SM8250 USB2-only tree supplies a mainline binding precedent.
+ */
+&usb_1 {
+	qcom,select-utmi-as-pipe-clk;
+	status = "okay";
+};
+
+&usb_1_dwc3 {
+	dr_mode = "peripheral";
+	maximum-speed = "high-speed";
+	phys = <&usb_1_hsphy>;
+	phy-names = "usb2-phy";
+};
+
+&usb_1_hsphy {
+	vdda-pll-supply = <&vreg_l5a_0p88>;
+	vdda18-supply = <&vreg_l12a_1p8>;
+	vdda33-supply = <&vreg_l2a_3p072>;
+	status = "okay";
+};
+
+/*
+ * Stock DTBO 26: PM8150 GPIO9 is VBUS boost (output low), GPIO10 VBUS
+ * detection (input, pull-down), and PM8150B has PD PHY @0x1700 supplied
+ * by L2.  The extcon TLMM specifier includes 0x5b, but translation and
+ * the board's Type-C role path are not yet proven; do not guess either.
+ *
+ * UFS is present in the stock tree, but is deliberately left disabled:
+ * the first USB-SSH initramfs runs entirely in RAM.  Display, camera,
+ * audio, UFS, USB3 and auxiliary processors remain unverified.
+ */
