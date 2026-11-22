@@ -77,10 +77,9 @@
 #define SAHARA_SWITCH_MODE_LENGTH	0xc
 
 /*
- * Upper bound for command mode entries without image transfer progress in
- * between. The host answers every command ready packet with a mode switch
- * back to the image transfer mode; a modem that keeps asking for the
- * command mode again would otherwise loop forever.
+ * Bound command-mode switches for the lifetime of the Sahara channel. A
+ * modem can repeatedly request the same images between command-mode entries,
+ * so an image request alone is not sufficient evidence of forward progress.
  */
 #define SAHARA_MAX_CMD_MODE_ENTRIES	4
 
@@ -242,8 +241,6 @@ static int sahara_find_image(struct sahara_context *context, u32 image_id)
 	}
 
 	context->active_image_id = image_id;
-	/* Progress: the modem asked for an image, so it is not stuck. */
-	context->cmd_mode_entries = 0;
 	dev_info(&context->mhi_dev->dev, "image %u: %s (%zu bytes)\n", image_id,
 		 context->image_table[image_id], context->firmware->size);
 
@@ -350,12 +347,9 @@ static void sahara_command_ready(struct sahara_context *context)
 
 	if (++context->cmd_mode_entries > SAHARA_MAX_CMD_MODE_ENTRIES) {
 		/*
-		 * The modem keeps asking for the command mode without making
-		 * progress. Do not reset it here: the modem re-enters the
-		 * command mode on its own after the last image, so a reset
-		 * would only start the exchange again. Stop switching the
-		 * mode instead and leave the modem in the command mode, where
-		 * it waits for a client command.
+		 * Stop switching modes. Repeated requests for the same images
+		 * can otherwise re-arm the loop indefinitely. Do not reset the
+		 * modem, since a reset can restart the same exchange.
 		 */
 		dev_err(&context->mhi_dev->dev,
 			"Modem asks for the command mode too often, staying in it\n");
