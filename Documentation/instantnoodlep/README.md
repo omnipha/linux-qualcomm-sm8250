@@ -88,6 +88,68 @@ raw IOVA values and kernel pointer values taken from debugfs. **Keep it
 local. Do not paste it into a public issue, a commit or a chat channel.**
 Use `--redact` for anything that leaves the device.
 
+## Matched boot inputs: `sdx55-stage.sh`
+
+The SDX55M loader asks the firmware loader for `qcom/sdx55m/<image>` both
+for the BHI SBL (`mhi_qcom_sdx55_flashless_info.fw`) and for every Sahara
+image (`drivers/bus/mhi/host/sahara.c`, `sdx55_image_table[]`). The loader
+returns the first hit in its search order
+(`drivers/base/firmware_loader/main.c`, `fw_path[]`):
+
+```
+/lib/firmware/updates/$(uname -r)
+/lib/firmware/updates
+/lib/firmware/$(uname -r)
+/lib/firmware
+```
+
+`sdx55-stage.sh` uses that order to place a matched set of boot inputs in
+`/lib/firmware/updates/$(uname -r)/qcom/sdx55m/`, where it shadows the
+installed set for the next boot. The installed files are never modified,
+never moved and never deleted; rollback is the removal of the staged
+directory. The staged tree is assembled in a temporary directory and
+published with a single rename, so the loader sees either the complete
+staged set or the untouched installed set, never a mixture.
+
+The set consists of the 13 firmware images of the **booted slot** (the
+modem partition the bootloader started, mounted read-only) plus the 4
+private inputs of this device: the modem EFS (`mdm1m9kefs1`,
+`mdm1m9kefs2`), the OnePlus NV backup (`mdm1oemnvbktmp`) and the DDR
+training data (`mdmddr`). The private inputs are copied with mode 600
+into a staged directory of mode 700. They stay on the device: the script
+never prints, hashes or copies them anywhere else.
+
+### Run procedure
+
+```sh
+# 1. mount the booted slot read-only (slot suffix from the kernel
+#    command line; the script uses the same detection)
+mount -o ro /dev/disk/by-partlabel/modem_a /run/sdx55-modem_a
+
+# 2. stage the matched set (the installed set stays untouched)
+sh Documentation/instantnoodlep/sdx55-stage.sh stage
+
+# 3. check what the loader will pick up
+sh Documentation/instantnoodlep/sdx55-stage.sh status
+sh Documentation/instantnoodlep/sdx55-stage.sh verify
+
+# 4. rollback, whenever the boot test is over
+sh Documentation/instantnoodlep/sdx55-stage.sh restore
+```
+
+`stage` refuses to publish a set that does not cover every image the
+loader asks for, so the staged set can never mix with the installed one.
+`status` prints only which directory each image resolves to; `verify`
+checks the resolution and the file modes. Neither prints file contents,
+hashes, addresses or kernel log lines.
+
+### Scope
+
+The script writes only inside `/lib/firmware/updates/`. It writes no
+partition, does not reboot, does not touch the modem, and does not change
+the installed firmware. Running `stage` and the boot test it is meant for
+is the owner's decision.
+
 ## Issue history
 
 The SDX55M modem boot work is tracked in issue #4 of this repository.
