@@ -638,10 +638,13 @@ static void sahara_memory_debug(struct sahara_context *context)
 {
 	int ret;
 
+	/*
+	 * The table address is a modem address: it must not reach the log, not
+	 * even in a debug message.
+	 */
 	dev_dbg(&context->mhi_dev->dev,
-		"MEMORY DEBUG cmd received. length:%d table_address:%x table_length:%x\n",
+		"MEMORY DEBUG cmd received. length:%d table_length:%x\n",
 		le32_to_cpu(context->rx->length),
-		le32_to_cpu(context->rx->memory_debug.table_address),
 		le32_to_cpu(context->rx->memory_debug.table_length));
 
 	if (le32_to_cpu(context->rx->length) != SAHARA_MEM_DEBUG_LENGTH) {
@@ -662,10 +665,13 @@ static void sahara_memory_debug64(struct sahara_context *context)
 {
 	int ret;
 
+	/*
+	 * The table address is a modem address: it must not reach the log, not
+	 * even in a debug message.
+	 */
 	dev_dbg(&context->mhi_dev->dev,
-		"MEMORY DEBUG64 cmd received. length:%d table_address:%#llx table_length:%#llx\n",
+		"MEMORY DEBUG64 cmd received. length:%d table_length:%#llx\n",
 		le32_to_cpu(context->rx->length),
-		le64_to_cpu(context->rx->memory_debug64.table_address),
 		le64_to_cpu(context->rx->memory_debug64.table_length));
 
 	if (le32_to_cpu(context->rx->length) != SAHARA_MEM_DEBUG64_LENGTH) {
@@ -1048,6 +1054,7 @@ static void sahara_mhi_dl_xfer_cb(struct mhi_device *mhi_dev, struct mhi_result 
 
 static const struct mhi_device_id sahara_mhi_match_table[] = {
 	{ .chan = "SAHARA", },
+	{ .chan = "EFS", },
 	{},
 };
 MODULE_DEVICE_TABLE(mhi, sahara_mhi_match_table);

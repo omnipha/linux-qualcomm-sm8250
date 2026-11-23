@@ -455,6 +455,9 @@ static const struct mhi_channel_config modem_qcom_sdx55_flashless_channels[] = {
 	/* A whole Sahara READ_DATA response is queued as one chained transfer */
 	MHI_CHANNEL_CONFIG_UL_SBL_AMSS(2, "SAHARA", 128, 0),
 	MHI_CHANNEL_CONFIG_DL_SBL_AMSS(3, "SAHARA", 32, 0),
+	/* The EFS sync uses the 32 bit memory debug request of Sahara */
+	MHI_CHANNEL_CONFIG_UL(10, "EFS", 32, 0),
+	MHI_CHANNEL_CONFIG_DL(11, "EFS", 32, 0),
 	MHI_CHANNEL_CONFIG_UL(4, "DIAG", 16, 1),
 	MHI_CHANNEL_CONFIG_DL(5, "DIAG", 16, 1),
 	MHI_CHANNEL_CONFIG_UL(12, "MBIM", 4, 0),
