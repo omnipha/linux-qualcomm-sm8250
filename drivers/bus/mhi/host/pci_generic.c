@@ -13,6 +13,9 @@
 #include <linux/mhi.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/devcoredump.h>
+#include <linux/vmalloc.h>
+#include <linux/sizes.h>
 #include <linux/pci.h>
 #include <linux/pm_runtime.h>
 #include <linux/timer.h>
@@ -1208,6 +1211,7 @@ struct mhi_pci_device {
 	struct mhi_controller mhi_cntrl;
 	struct pci_saved_state *pci_state;
 	struct work_struct recovery_work;
+	struct work_struct rddm_work;
 	struct timer_list health_check_timer;
 	unsigned long status;
 	bool reset_on_remove;
@@ -1238,12 +1242,63 @@ static void mhi_pci_status_cb(struct mhi_controller *mhi_cntrl,
 		dev_warn(&pdev->dev, "firmware crashed (%u)\n", cb);
 		pm_runtime_forbid(&pdev->dev);
 		break;
+	case MHI_CB_EE_RDDM:
+		dev_warn(&pdev->dev, "firmware crashed, collecting RAM dump\n");
+		pm_runtime_forbid(&pdev->dev);
+		schedule_work(&container_of(mhi_cntrl, struct mhi_pci_device,
+					    mhi_cntrl)->rddm_work);
+		break;
 	case MHI_CB_EE_MISSION_MODE:
 		pm_runtime_allow(&pdev->dev);
 		break;
 	default:
 		break;
 	}
+}
+
+/*
+ * The modem wrote its RAM dump over BHIe into the buffer table allocated
+ * for rddm_size. Hand the result to devcoredump, which keeps it in the local
+ * sysfs attribute of the controller device and frees it when it is read back
+ * or the device goes away. The dump itself is modem RAM and stays on the
+ * device; only its size is reported to the log.
+ */
+static void mhi_pci_rddm_work(struct work_struct *work)
+{
+	struct mhi_pci_device *mhi_pdev = container_of(work, struct mhi_pci_device,
+						       rddm_work);
+	struct mhi_controller *mhi_cntrl = &mhi_pdev->mhi_cntrl;
+	struct image_info *img = mhi_cntrl->rddm_image;
+	size_t size = 0, off = 0;
+	unsigned int i;
+	void *buf;
+	int ret;
+
+	/* Allocated in mhi_prepare_for_power_up() and may have failed */
+	if (!img)
+		return;
+
+	ret = mhi_download_rddm_image(mhi_cntrl, false);
+	if (ret) {
+		dev_err(mhi_cntrl->cntrl_dev, "RAM dump download failed: %d\n", ret);
+		return;
+	}
+
+	/* The last entry holds the vector table */
+	for (i = 0; i < img->entries - 1; i++)
+		size += img->mhi_buf[i].len;
+
+	buf = vmalloc(size);
+	if (!buf)
+		return;
+
+	for (i = 0; i < img->entries - 1; i++) {
+		memcpy(buf + off, img->mhi_buf[i].buf, img->mhi_buf[i].len);
+		off += img->mhi_buf[i].len;
+	}
+
+	dev_info(mhi_cntrl->cntrl_dev, "RAM dump of %zu bytes collected\n", size);
+	dev_coredumpv(mhi_cntrl->cntrl_dev, buf, size, GFP_KERNEL);
 }
 
 static void mhi_pci_wake_get_nop(struct mhi_controller *mhi_cntrl, bool force)
@@ -1501,6 +1556,7 @@ static int mhi_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		return -ENOMEM;
 
 	INIT_WORK(&mhi_pdev->recovery_work, mhi_pci_recovery_work);
+	INIT_WORK(&mhi_pdev->rddm_work, mhi_pci_rddm_work);
 
 	if (pdev->is_virtfn && info->vf_config)
 		mhi_cntrl_config = info->vf_config;
@@ -1520,6 +1576,15 @@ static int mhi_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	mhi_cntrl->iova_start = 0;
 	mhi_cntrl->iova_stop = (dma_addr_t)DMA_BIT_MASK(dma_data_width);
 	mhi_cntrl->fw_image = info->fw;
+	if (info == &mhi_qcom_sdx55_flashless_info) {
+		/*
+		 * RDDM is collected through a BHIe table of 512 KiB segments.
+		 * The size is the amount of modem RAM the dump may take, the
+		 * segment length is the size of one BHIe vector.
+		 */
+		mhi_cntrl->rddm_size = SZ_64M;
+		mhi_cntrl->seg_len = SZ_512K;
+	}
 	mhi_cntrl->edl_image = info->edl;
 
 	mhi_cntrl->read_reg = mhi_pci_read_reg;
@@ -1611,6 +1676,7 @@ static void mhi_pci_remove(struct pci_dev *pdev)
 	if (!pdev->is_virtfn)
 		timer_delete_sync(&mhi_pdev->health_check_timer);
 	cancel_work_sync(&mhi_pdev->recovery_work);
+	cancel_work_sync(&mhi_pdev->rddm_work);
 
 	if (test_and_clear_bit(MHI_PCI_DEV_STARTED, &mhi_pdev->status)) {
 		mhi_power_down(mhi_cntrl, true);

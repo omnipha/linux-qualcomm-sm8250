@@ -429,7 +429,12 @@ static enum mhi_fw_load_type mhi_fw_load_type_get(const struct mhi_controller *m
 	if (mhi_cntrl->fbc_download) {
 		return MHI_FW_LOAD_FBC;
 	} else {
-		if (mhi_cntrl->seg_len)
+		/*
+		 * seg_len set only for the RDDM table of a flashless profile
+		 * does not make the SBL load a BHIe transfer: the SBL still
+		 * goes over BHI, the BHIe table is used for RDDM alone.
+		 */
+		if (mhi_cntrl->seg_len && !mhi_cntrl->rddm_size)
 			return MHI_FW_LOAD_BHIE;
 		else
 			return MHI_FW_LOAD_BHI;
