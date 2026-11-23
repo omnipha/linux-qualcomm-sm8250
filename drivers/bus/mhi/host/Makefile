@@ -7,3 +7,6 @@ mhi_pci_generic-y += pci_generic.o
 
 obj-$(CONFIG_MHI_BUS_SAHARA) += mhi_sahara.o
 mhi_sahara-y := sahara.o
+
+# DEBUG
+ccflags-y += -DDEBUG

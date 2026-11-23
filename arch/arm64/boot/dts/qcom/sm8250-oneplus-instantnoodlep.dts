@@ -1326,6 +1326,24 @@
 &tlmm {
 	gpio-reserved-ranges = <28 4>, <40 4>;
 
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&ap2mdm_active>;
+	pinctrl-1 = <&ap2mdm_sleep>;
+
+	ap2mdm-status-hog {
+		gpio-hog;
+		gpios = <56 GPIO_ACTIVE_HIGH>;
+		output-high;
+		line-name = "ap2mdm-status";
+	};
+
+	ap2mdm-errfatal-hog {
+		gpio-hog;
+		gpios = <57 GPIO_ACTIVE_HIGH>;
+		output-low;
+		line-name = "ap2mdm-errfatal";
+	};
+
 	cam_filter_default: cam-filter-default-state {
 		mclk-pins {
 			pins = "gpio98";
