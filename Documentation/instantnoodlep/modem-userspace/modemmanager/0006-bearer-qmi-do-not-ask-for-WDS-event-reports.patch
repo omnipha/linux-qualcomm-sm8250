@@ -1,0 +1,47 @@
+From: Timo <1788603+darknagel@users.noreply.github.com>
+Subject: [PATCH] bearer-qmi: do not ask for WDS event reports
+
+A connected bearer asks the modem for a dozen WDS event reports and then
+only logs that one arrived. On a phone every report wakes the sleeping
+host. With the IMS bearer left connected over system sleep, the dormancy
+status report arrived about ten seconds after the phone went to sleep and
+woke it up again, every time.
+
+Signed-off-by: Timo <1788603+darknagel@users.noreply.github.com>
+---
+--- a/src/mm-bearer-qmi.c
++++ b/src/mm-bearer-qmi.c
+@@ -1510,18 +1510,21 @@
+     QmiMessageWdsSetEventReportInput *input;
+ 
+     input = qmi_message_wds_set_event_report_input_new ();
+-    qmi_message_wds_set_event_report_input_set_extended_data_bearer_technology (input, enable, NULL);
+-    qmi_message_wds_set_event_report_input_set_limited_data_system_status (input, enable, NULL);
+-    qmi_message_wds_set_event_report_input_set_uplink_flow_control (input, enable, NULL);
+-    qmi_message_wds_set_event_report_input_set_data_systems (input, enable, NULL);
+-    qmi_message_wds_set_event_report_input_set_evdo_pm_change (input, enable, NULL);
+-    qmi_message_wds_set_event_report_input_set_preferred_data_system (input, enable, NULL);
+-    qmi_message_wds_set_event_report_input_set_data_call_status (input, enable, NULL);
+-    qmi_message_wds_set_event_report_input_set_current_data_bearer_technology (input, enable, NULL);
+-    qmi_message_wds_set_event_report_input_set_mip_status (input, enable, NULL);
+-    qmi_message_wds_set_event_report_input_set_dormancy_status (input, enable, NULL);
+-    qmi_message_wds_set_event_report_input_set_data_bearer_technology (input, enable, NULL);
+-    qmi_message_wds_set_event_report_input_set_channel_rate (input, enable, NULL);
++    /* Nothing is done with these reports, see event_report_indication_cb().
++     * On a phone each of them wakes the sleeping host, the dormancy status
++     * for one about ten seconds after it went to sleep. Ask for none. */
++    qmi_message_wds_set_event_report_input_set_extended_data_bearer_technology (input, FALSE, NULL);
++    qmi_message_wds_set_event_report_input_set_limited_data_system_status (input, FALSE, NULL);
++    qmi_message_wds_set_event_report_input_set_uplink_flow_control (input, FALSE, NULL);
++    qmi_message_wds_set_event_report_input_set_data_systems (input, FALSE, NULL);
++    qmi_message_wds_set_event_report_input_set_evdo_pm_change (input, FALSE, NULL);
++    qmi_message_wds_set_event_report_input_set_preferred_data_system (input, FALSE, NULL);
++    qmi_message_wds_set_event_report_input_set_data_call_status (input, FALSE, NULL);
++    qmi_message_wds_set_event_report_input_set_current_data_bearer_technology (input, FALSE, NULL);
++    qmi_message_wds_set_event_report_input_set_mip_status (input, FALSE, NULL);
++    qmi_message_wds_set_event_report_input_set_dormancy_status (input, FALSE, NULL);
++    qmi_message_wds_set_event_report_input_set_data_bearer_technology (input, FALSE, NULL);
++    qmi_message_wds_set_event_report_input_set_channel_rate (input, FALSE, NULL);
+ 
+     return input;
+ }

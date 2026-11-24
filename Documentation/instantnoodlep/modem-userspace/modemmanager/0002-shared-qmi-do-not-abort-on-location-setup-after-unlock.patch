@@ -1,0 +1,44 @@
+From: Timo <1788603+darknagel@users.noreply.github.com>
+Subject: [PATCH] shared-qmi: do not abort on location setup after SIM unlock
+
+The location interface is initialized a second time after a SIM PIN unlock.
+The inject request signals are then already connected and the assertion
+aborts ModemManager.
+
+Signed-off-by: Timo <1788603+darknagel@users.noreply.github.com>
+---
+--- a/src/mm-shared-qmi.c
++++ b/src/mm-shared-qmi.c
+@@ -7065,19 +7065,20 @@
+         goto out;
+     }
+ 
+-    g_assert (!priv->loc_assistance_inject_time_req_indication_id);
+-    priv->loc_assistance_inject_time_req_indication_id =
+-        g_signal_connect (client,
+-                          "inject-time-request",
+-                          G_CALLBACK (loc_location_inject_time_req_indication_cb),
+-                          self);
++    /* The location interface is initialized again after a SIM PIN unlock */
++    if (!priv->loc_assistance_inject_time_req_indication_id)
++        priv->loc_assistance_inject_time_req_indication_id =
++            g_signal_connect (client,
++                              "inject-time-request",
++                              G_CALLBACK (loc_location_inject_time_req_indication_cb),
++                              self);
+ 
+-    g_assert (!priv->loc_assistance_inject_position_req_indication_id);
+-    priv->loc_assistance_inject_position_req_indication_id =
+-        g_signal_connect (client,
+-                          "inject-position-request",
+-                          G_CALLBACK (loc_location_inject_position_req_indication_cb),
+-                          self);
++    if (!priv->loc_assistance_inject_position_req_indication_id)
++        priv->loc_assistance_inject_position_req_indication_id =
++            g_signal_connect (client,
++                              "inject-position-request",
++                              G_CALLBACK (loc_location_inject_position_req_indication_cb),
++                              self);
+ 
+ out:
+     g_task_return_int (task, MM_MODEM_LOCATION_ASSISTANCE_DATA_TYPE_XTRA);

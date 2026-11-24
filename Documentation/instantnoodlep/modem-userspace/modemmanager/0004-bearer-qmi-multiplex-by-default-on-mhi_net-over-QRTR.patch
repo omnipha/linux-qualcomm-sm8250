@@ -1,0 +1,27 @@
+From: Timo <1788603+darknagel@users.noreply.github.com>
+Subject: [PATCH] bearer-qmi: multiplex by default on mhi_net with QMI over QRTR
+
+The SDX55 on MHI has a single data channel (IP_HW0). Without multiplexing
+only one connection fits on it: once 81voltd had brought up the IMS
+connection for VoLTE, Start Network for the internet connection returned
+NoEffect and mobile data never came up. Request multiplexing by default
+for such a modem, so every bearer gets its own rmnet link (needs
+CONFIG_RMNET).
+
+Signed-off-by: Timo <1788603+darknagel@users.noreply.github.com>
+---
+--- a/src/mm-bearer-qmi.c
++++ b/src/mm-bearer-qmi.c
+@@ -2449,6 +2449,12 @@
+             ctx->multiplex = MM_BEARER_MULTIPLEX_SUPPORT_REQUESTED;
+         else if (!g_strcmp0 (data_port_driver, "ipa"))
+             ctx->multiplex = MM_BEARER_MULTIPLEX_SUPPORT_REQUIRED;
++        /* A modem on MHI with QMI over QRTR has a single data channel. The
++         * IMS connection of 81voltd and the internet connection only fit on
++         * it together when both are multiplexed. */
++        else if (!g_strcmp0 (data_port_driver, "mhi_net") &&
++                 mm_port_get_subsys (MM_PORT (ctx->qmi)) == MM_PORT_SUBSYS_QRTR)
++            ctx->multiplex = MM_BEARER_MULTIPLEX_SUPPORT_REQUESTED;
+         else
+             ctx->multiplex = MM_BEARER_MULTIPLEX_SUPPORT_NONE;
+     }

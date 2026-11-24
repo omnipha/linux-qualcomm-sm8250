@@ -1,0 +1,82 @@
+From: Timo <1788603+darknagel@users.noreply.github.com>
+Subject: [PATCH] iface-modem-simple: disconnect only its own bearers
+
+Simple.Disconnect("/") disconnects all bearers of the modem.
+NetworkManager calls it whenever it brings its mobile data connection
+down: for a new activation and before system sleep. That also took the
+IMS bearer of 81voltd down. The modem lost its IMS registration, asked
+for the connection again at once and, on a phone that was going to
+sleep, woke it up again within seconds.
+
+Mark the bearers that the Simple interface connects, and let a
+disconnect request for all bearers only cover those.
+
+Signed-off-by: Timo <1788603+darknagel@users.noreply.github.com>
+---
+--- a/src/mm-bearer-list.c
++++ b/src/mm-bearer-list.c
+@@ -257,6 +257,13 @@
+ build_connected_bearer_list (MMBaseBearer             *bearer,
+                              DisconnectBearersContext *ctx)
+ {
++    /* Only the bearers that were connected through the Simple interface */
++    if (ctx->bearer_path && g_str_equal (ctx->bearer_path, MM_BEARER_LIST_PATH_SIMPLE)) {
++        if (g_object_get_data (G_OBJECT (bearer), MM_BEARER_LIST_SIMPLE_TAG))
++            ctx->pending_to_disconnect = g_list_prepend (ctx->pending_to_disconnect, g_object_ref (bearer));
++        return;
++    }
++
+     if (!ctx->bearer_path ||
+         g_str_equal (ctx->bearer_path, mm_base_bearer_get_path (bearer)))
+         ctx->pending_to_disconnect = g_list_prepend (ctx->pending_to_disconnect, g_object_ref (bearer));
+@@ -280,7 +287,8 @@
+      * disconnect all. */
+     mm_bearer_list_foreach (self, (MMBearerListForeachFunc)build_connected_bearer_list, ctx);
+ 
+-    if (ctx->bearer_path && !ctx->pending_to_disconnect) {
++    if (ctx->bearer_path && !ctx->pending_to_disconnect &&
++        !g_str_equal (ctx->bearer_path, MM_BEARER_LIST_PATH_SIMPLE)) {
+         g_task_return_new_error (task, MM_CORE_ERROR, MM_CORE_ERROR_INVALID_ARGS,
+                                  "Couldn't disconnect bearer '%s': not found",
+                                  ctx->bearer_path);
+--- a/src/mm-bearer-list.h
++++ b/src/mm-bearer-list.h
+@@ -79,6 +79,12 @@
+ MMBaseBearer *mm_bearer_list_find_by_apn_type   (MMBearerList       *self,
+                                                  MMBearerApnType     apn_type);
+ 
++/* Pseudo bearer path for mm_bearer_list_disconnect_bearers(): the bearers that
++ * carry MM_BEARER_LIST_SIMPLE_TAG as object data, set when the Simple
++ * interface connects them. */
++#define MM_BEARER_LIST_PATH_SIMPLE "simple"
++#define MM_BEARER_LIST_SIMPLE_TAG  "mm-simple-connected"
++
+ void     mm_bearer_list_disconnect_bearers        (MMBearerList        *self,
+                                                    const gchar         *bearer_path,
+                                                    GAsyncReadyCallback  callback,
+--- a/src/mm-iface-modem-simple.c
++++ b/src/mm-iface-modem-simple.c
+@@ -850,6 +850,7 @@
+ 
+         /* Wait... if we're already using an existing bearer, we need to check if it is
+          * already connected; and if so, just don't do anything else */
++        g_object_set_data (G_OBJECT (ctx->bearer), MM_BEARER_LIST_SIMPLE_TAG, GUINT_TO_POINTER (1));
+         if (mm_base_bearer_get_status (ctx->bearer) != MM_BEARER_STATUS_CONNECTED) {
+             mm_base_bearer_connect (ctx->bearer,
+                                     (GAsyncReadyCallback)connect_bearer_ready,
+@@ -1058,10 +1059,13 @@
+     if (ctx->bearer_path)
+         mm_obj_info (self, "processing user request to disconnect modem: bearer '%s'", ctx->bearer_path);
+     else
+-        mm_obj_info (self, "processing user request to disconnect modem: all bearers");
++        mm_obj_info (self, "processing user request to disconnect modem: all bearers of the simple interface");
+ 
++    /* A request for all bearers comes from a connection manager that brings
++     * its own connection down. Bearers that someone else created and
++     * connected, like the IMS bearer of 81voltd, are not its business. */
+     mm_bearer_list_disconnect_bearers (list,
+-                                       ctx->bearer_path,
++                                       ctx->bearer_path ? ctx->bearer_path : MM_BEARER_LIST_PATH_SIMPLE,
+                                        (GAsyncReadyCallback)bearer_list_disconnect_bearers_ready,
+                                        ctx);
+ }

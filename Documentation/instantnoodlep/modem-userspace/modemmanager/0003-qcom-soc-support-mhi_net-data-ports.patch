@@ -1,0 +1,85 @@
+From: Timo <1788603+darknagel@users.noreply.github.com>
+Subject: [PATCH] qcom-soc: support mhi_net data ports
+
+An SDX55 on MHI exposes its QMI services over QRTR, which puts it in this
+plugin, while the data port uses mhi_net. Use the PCIe endpoint for it and
+bind the WDS clients to the data port, Start Network otherwise fails with
+InvalidOperation.
+
+Signed-off-by: Timo <1788603+darknagel@users.noreply.github.com>
+---
+--- a/src/plugins/qcom-soc/mm-broadband-modem-qmi-qcom-soc.c
++++ b/src/plugins/qcom-soc/mm-broadband-modem-qmi-qcom-soc.c
+@@ -111,6 +111,34 @@
+ }
+ 
+ static MMPortQmi *
++peek_port_qmi_for_data_mhi (MMBroadbandModemQmi  *self,
++                            MMPort               *data,
++                            MMQmiDataEndpoint    *out_endpoint,
++                            GError              **error)
++{
++    MMPortQmi *found = NULL;
++
++    /* A modem on MHI with QMI over QRTR: any QMI port manages the network
++     * interface, and the data port is not implied by the control channel */
++
++    found = mm_broadband_modem_qmi_peek_port_qmi (self);
++
++    if (!found)
++        g_set_error (error,
++                     MM_CORE_ERROR,
++                     MM_CORE_ERROR_NOT_FOUND,
++                     "Couldn't find any QMI port for 'net/%s'",
++                     mm_port_get_device (data));
++    else if (out_endpoint) {
++        out_endpoint->type = QMI_DATA_ENDPOINT_TYPE_PCIE;
++        out_endpoint->interface_number = 4;
++        out_endpoint->sio_port = QMI_SIO_PORT_NONE;
++    }
++
++    return found;
++}
++
++static MMPortQmi *
+ peek_port_qmi_for_data (MMBroadbandModemQmi  *self,
+                         MMPort               *data,
+                         MMQmiDataEndpoint    *out_endpoint,
+@@ -131,6 +159,9 @@
+     if (g_strcmp0 (net_port_driver, "bam-dmux") == 0)
+         return peek_port_qmi_for_data_bam_dmux (self, data, out_endpoint, error);
+ 
++    if (g_strcmp0 (net_port_driver, "mhi_net") == 0)
++        return peek_port_qmi_for_data_mhi (self, data, out_endpoint, error);
++
+     g_set_error (error,
+                  MM_CORE_ERROR,
+                  MM_CORE_ERROR_FAILED,
+--- a/src/mm-bearer-qmi.c
++++ b/src/mm-bearer-qmi.c
+@@ -2082,8 +2082,10 @@
+             return;
+         }
+ 
+-        /* If mux id given, bind mux data port */
+-        if (ctx->sio_port_failed || ctx->mux_id != QMI_DEVICE_MUX_ID_UNBOUND) {
++        /* If mux id given, bind mux data port. Over QRTR the client has no
++         * data port of its own, so it needs this even without multiplexing. */
++        if (ctx->sio_port_failed || ctx->mux_id != QMI_DEVICE_MUX_ID_UNBOUND ||
++            mm_port_get_subsys (MM_PORT (ctx->qmi)) == MM_PORT_SUBSYS_QRTR) {
+             g_autoptr(QmiMessageWdsBindMuxDataPortInput) input = NULL;
+ 
+             mm_obj_dbg (self, "binding to mux id %d", ctx->mux_id);
+@@ -2227,8 +2229,10 @@
+             return;
+         }
+ 
+-        /* If mux id given, bind mux data port */
+-        if (ctx->sio_port_failed || ctx->mux_id != QMI_DEVICE_MUX_ID_UNBOUND) {
++        /* If mux id given, bind mux data port. Over QRTR the client has no
++         * data port of its own, so it needs this even without multiplexing. */
++        if (ctx->sio_port_failed || ctx->mux_id != QMI_DEVICE_MUX_ID_UNBOUND ||
++            mm_port_get_subsys (MM_PORT (ctx->qmi)) == MM_PORT_SUBSYS_QRTR) {
+             g_autoptr(QmiMessageWdsBindMuxDataPortInput) input = NULL;
+ 
+             mm_obj_dbg (self, "binding to mux id %d", ctx->mux_id);

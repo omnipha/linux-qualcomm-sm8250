@@ -9,12 +9,12 @@ The kernel provides MHI, Sahara, QRTR and WWAN. The modem additionally needs
 userspace helpers that serve its file system requests and provision the SIM.
 Those helpers are not part of this repository: they come from the
 [Nura reference port](https://github.com/darknagel/oneplus-instantnoodlep-nura-unofficial),
-`modem/` directory, **pinned to commit `2b25a23dc858c9e100c027d2446ce28a74262e60`**.
+`modem/` directory, **pinned to commit `c15014dc571947d0bfec251fcba59bf006f880b4`** (the `modem/` directory is byte-identical at the later local commit `2b25a23`, which is not published).
 The reference repository carries no license file, so its scripts are not copied
-here. Follow its [modem README](https://github.com/darknagel/oneplus-instantnoodlep-nura-unofficial/blob/2b25a23dc858c9e100c027d2446ce28a74262e60/modem/README.md)
+here. Follow its [modem README](https://github.com/darknagel/oneplus-instantnoodlep-nura-unofficial/blob/c15014dc571947d0bfec251fcba59bf006f880b4/modem/README.md)
 and `modem/install.sh` at that commit.
 
-What was installed on the test unit from that commit:
+What was installed on the test unit from that revision:
 
 | Part | Installed as | Purpose |
 | --- | --- | --- |
