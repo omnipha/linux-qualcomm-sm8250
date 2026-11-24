@@ -1,7 +1,6 @@
 # SDX55M userspace (OnePlus 8 Pro)
 
-State: **incomplete**. The modem reaches Mission Mode and ModemManager sees its
-ports, but the modem cannot be enabled yet (QMI error 52, `DeviceNotReady`). See
+State: **registration works on one unit, data untested**. With a firmware set matched to the booted slot the modem goes online and registers (LTE/5G NR); with the generic installed set it stayed offline (QMI error 52, `DeviceNotReady`). See
 [../STATUS.md](../STATUS.md) for the measured state. Measured on one unit only,
 kernel `7.2.0-g1a8787818fe1`, postmarketOS (Alpine, systemd).
 
@@ -49,9 +48,8 @@ second person.
 
 ## Known state and limits
 
-- Enabling the modem fails with `DeviceNotReady`. The cause is not found.
-- UIM reports the USIM in slot 1, but the primary provisioning session stays
-  empty and ModemManager selects slot 2. Switching the slot fails (QMI error 3).
-- Registration, data, SMS, calls, IMS and GNSS are untested.
+- Run `sdx55-stage.sh stage` (see `../sdx55-stage.sh`) before the boot, so the 17 loader images come from the modem partition of the booted slot. Without it the modem stayed offline.
+- ModemManager still lists slot 2 as primary slot; the UIM primary session is slot 1 and registration works.
+- Data, SMS, calls, IMS and GNSS are untested.
 - Keep EFS, modem firmware, calibration data and SIM identifiers out of logs and
   issues.
