@@ -19,15 +19,33 @@ Everything below was measured on **one OnePlus 8 Pro IN2023 (`instantnoodlep`)**
 | Thermal and cpufreq | 29 thermal zones are exposed; `qcom-cpufreq-hw` controls CPU frequency scaling. |
 | Panic log | `ramoops` is active and records kernel oopses across reboots. |
 
+## Measured on kernel `7.2.0-g1a8787818fe1` (2026-11-24)
+
+Same unit (OnePlus 8 Pro IN2023), commit [1a8787818fe1](https://github.com/omnipha/linux-qualcomm-sm8250/commit/1a8787818fe1), cold boot from `boot_b` (no kexec), postmarketOS-based root filesystem. Only what was observed on this boot is listed; the table above was not re-measured.
+
+| Component | Observed status |
+| --- | --- |
+| Boot | Cold boot from `boot_b`, WLAN (`wlan0`) up, stable for the observation window. |
+| Remote processors | `adsp`, `cdsp`, `slpi` running. |
+| Thermal | 29 thermal zones; cooling devices include `devfreq-3d00000.gpu` (fix for #1 is active in this build). |
+| Task I/O accounting | `/proc/self/io` is readable (fix for #2 is active in this build). |
+| SDX55M modem, kernel level | `mhi0` reached **Mission Mode** at 18:30:17 (PBL, SBL, Sahara, Mission Mode). MHI devices DIAG, EFS, MBIM, QMI, IPCR, IP_SW0, IP_HW0 exist. `wwan0` with `wwan0mbim0`, `wwan0qmi0`, `wwan0qcdm0` is present; `mhi_hwip0` and `mhi_swip0` exist. The previous kernel `398cbb77` stayed in SBL with the same inputs. |
+| SDX55M modem, userspace | `sdx55-rfsd` serves the modem EFS requests (reads, writes and EFS syncs observed). With the patched ModemManager the ports `mhi_hwip0 (net)` and `qrtr3 (qmi)` are detected; before, ModemManager reported `Failed to find net port`. |
+| SIM | QMI UIM reports a card with a USIM application in slot 1 and a card error in slot 2 (no ATR, no card inserted). The SIM is known to work in another system and has no PIN. |
+
+**Not working on this unit:** the modem cannot be enabled. `mmcli -e` and `sdx55-modemstate online` fail with QMI error 52 (`DeviceNotReady`); DMS operating mode stays `offline`, NAS reports not registered, the UIM primary session is `0000ffffffffffff` (no provisioned session) and ModemManager's primary SIM slot is 2 (the empty slot). Requesting slot 1 fails with QMI error 3 (`Internal`). No network registration, no mobile data, no SMS, no calls, no IMS, no GNSS. The Sahara driver logs one DL callback error `-107` shortly after the Mission Mode transition; its meaning is unknown.
+
+The userspace side is described in [modem-userspace/README.md](modem-userspace/README.md).
+
 ## Known open issues
 
 - GPU devfreq thermal cooling was disabled in the kernel config; a source fix (`CONFIG_DEVFREQ_THERMAL=y`) was merged in `8cd047b96e1e` on 2026-11-21 and [#1](https://github.com/omnipha/linux-qualcomm-sm8250/issues/1) is closed; on-device verification still requires flashing the new kernel.
 - Per-task I/O accounting was disabled in the kernel config, so `/proc/self/io` was unavailable; a source fix (`CONFIG_TASKSTATS=y`, `CONFIG_TASK_XACCT=y`, `CONFIG_TASK_IO_ACCOUNTING=y`) was merged in `9763e16ad036` on 2026-11-21 and [#2](https://github.com/omnipha/linux-qualcomm-sm8250/issues/2) is closed; on-device verification still requires flashing the new kernel.
 - The RTC cannot store time on this kernel; `hwclock --systohc` fails with `ENODEV`. A source fix (PM8150 SDAM2 offset cell, `CONFIG_NVMEM_SPMI_SDAM=y`) was merged in `7e5c7b1ce280` on 2026-11-20 and [#3](https://github.com/omnipha/linux-qualcomm-sm8250/issues/3) is closed; on-device verification still requires flashing the new DTB.
-- The SDX55M modem on PCIe (`17cb:0306` / `17cb:010c`) does not reach mission mode: the earlier fix (`b3c4a93fd552`) only selected `mhi_qcom_sdx55_info`, which has no Sahara channel, so the flashless module never receives the SBL and the remaining images. The follow-up adds the reference flashless profile (`CONFIG_MHI_BUS_SAHARA`, `drivers/bus/mhi/host/sahara.c`), selects it with the device-tree `qcom,flashless` property instead of the shadowed subsystem-ID match, and adds EE/SBL/Sahara instrumentation. [#4](https://github.com/omnipha/linux-qualcomm-sm8250/issues/4) stays **open**: the source change is built and the DTB is verified, but mission mode, `/dev/wwan*` and sustained status after a clean reboot are not measured on this unit. Runtime acceptance requires a separately authorized boot test with a verified fallback.
+- The SDX55M modem reaches Mission Mode on this unit with `1a8787818fe1` (see above), but cannot be enabled (`DeviceNotReady`). [#4](https://github.com/omnipha/linux-qualcomm-sm8250/issues/4) stays **open**: registration, SIM provisioning, data and stability over time are not measured. GNSS is tracked in [#11](https://github.com/omnipha/linux-qualcomm-sm8250/issues/11).
 
 ## Not verified
 
 - Sensors (accelerometer, gyroscope, magnetometer, light, proximity) do not work.
 - Camera hardware (IMX689, IMX586, IMX471, S5K3M5, GC5035 and focus actuators) is present in the device tree and its drivers are built, but capture, camera GUI and image quality are not verified; a device tree and a compiled driver are not proof of a working camera.
-- Suspend/resume, mobile network, NFC and GPS are unverified.
+- Suspend/resume, mobile network (registration, data, SMS, calls), NFC and GPS are unverified.

@@ -1,0 +1,116 @@
+# Forked from Alpine: fix the abort after a SIM PIN unlock
+# Contributor: Stuart Cardall <developer@it-offshore.co.uk>
+maintainer="Achill Gilgenast <achill@achill.org>"
+pkgname=modemmanager
+pkgver=1.25.95_git20261005
+pkgrel=7
+_commit=7f0bf17ab518cd78925cf7e53cc0d5c42f88b41a
+pkgdesc="ModemManager library"
+url="https://www.freedesktop.org/wiki/Software/ModemManager"
+arch="all"
+license="GPL-2.0-or-later AND LGPL-2.1-or-later"
+depends="
+	dbus
+	libmm-glib=$pkgver-r$pkgrel
+	mobile-broadband-provider-info
+	polkit
+	"
+depends_dev="libmm-glib=$pkgver-r$pkgrel"
+makedepends="
+	bash-completion-dev
+	dbus-dev
+	gobject-introspection-dev
+	gtk-doc
+	libgudev-dev
+	libmbim-dev
+	libqmi-dev
+	linux-headers
+	meson
+	polkit-dev
+	vala
+	"
+checkdepends="glib-dev py3-gobject3 py3-dbus"
+subpackages="
+	$pkgname-lang
+	$pkgname-doc
+	libmm-glib:libmm
+	$pkgname-dbg
+	$pkgname-dev
+	$pkgname-openrc
+	$pkgname-bash-completion
+	$pkgname-systemd
+	$pkgname-udev
+	"
+#source="https://gitlab.freedesktop.org/mobile-broadband/ModemManager/-/archive/$pkgver/ModemManager-$pkgver.tar.gz
+source="https://gitlab.freedesktop.org/mobile-broadband/ModemManager/-/archive/$_commit/ModemManager-$_commit.tar.gz
+	$pkgname.rules
+	$pkgname.initd
+
+	0001-intel-XMM7360-fix-big-endian-handling-of-ASN-integer.patch
+	0002-shared-qmi-do-not-abort-on-location-setup-after-unlock.patch
+	0003-qcom-soc-support-mhi_net-data-ports.patch
+	0004-bearer-qmi-multiplex-by-default-on-mhi_net-over-QRTR.patch
+	0005-iface-modem-simple-disconnect-only-its-own-bearers.patch
+	0006-bearer-qmi-do-not-ask-for-WDS-event-reports.patch
+	"
+#builddir="$srcdir"/ModemManager-$pkgver
+builddir="$srcdir"/ModemManager-$_commit
+options="!check"
+
+build() {
+	# Temporarily disable gtkdoc generation due to error in helper script
+	# https://gitlab.freedesktop.org/mobile-broadband/ModemManager/-/issues/902
+	abuild-meson \
+		-Db_lto=true \
+		-Dsystemdsystemunitdir=/usr/lib/systemd/system \
+		-Ddbus_policy_dir=/usr/share/dbus-1/system.d \
+		-Dgtk_doc=false \
+		-Dpolkit=permissive \
+		-Dsystemd_journal=false \
+		-Dsystemd_suspend_resume=true \
+		-Dvapi=true \
+		-Dplugin_mtk=disabled \
+		-Dplugin_mtk_legacy=disabled \
+		-Dplugin_rolling=disabled \
+		. output
+	meson compile -C output
+}
+
+check() {
+	meson test -C output
+}
+
+package() {
+	DESTDIR="$pkgdir" meson install --no-rebuild -C output
+	install -m644 -D "$srcdir/$pkgname.rules" \
+		"$pkgdir/usr/share/polkit-1/rules.d/01-org.freedesktop.ModemManager.rules"
+	install -m755 -D "$srcdir/$pkgname.initd" \
+		"$pkgdir/etc/init.d/$pkgname"
+
+	# post-install message
+	mkdir -p "$pkgdir/usr/share/doc/$pkgname"
+	cat > "$pkgdir"/usr/share/doc/$pkgname/README.alpine <<- EOF
+	If your USB modem shows up as a Flash drive when you plug it in:
+
+	install 'usb-modeswitch' to automatically switch to USB modem mode whenever you plug it in.
+	To control your modem without the root password: add your user account to the 'plugdev' group.
+	EOF
+}
+
+libmm() {
+	depends=""
+	amove usr/lib/girepository-1.0
+	amove usr/lib/libmm-glib.so*
+}
+
+sha512sums="
+e049eecc104c989f516402ca7c21e3374c152e3840cf05c34ac91bc8e3305c83b53693bc0964f657664d4156baaac1a4e0fa35dd577733623dd669b67f1675f6  ModemManager-7f0bf17ab518cd78925cf7e53cc0d5c42f88b41a.tar.gz
+6fab86c27502b29be0c6610d835a3249a4a81993eb986cff2c3ea9393fadd3f693ba4bb0532ae0e50a83d359559511859dd05f7ea2f0cb52839f535a7e49f8a0  modemmanager.rules
+6e234cebcdec6d1afbca164ee5c13c96f7132ef31231d5c043cc5750ebe99e362a384d0463874b3c1c30799b433e0d3286add03af13c97fa406b4b5d2b78880c  modemmanager.initd
+f06e9b89acab5b61c5965658d62551b0f168066384674f7c4dd56feb6f811c82c640470e634e32d8c4ef62290588cf974aa5f213e5c67e797a06d33e61fa24ec  0001-intel-XMM7360-fix-big-endian-handling-of-ASN-integer.patch
+15e206739314e2d5730bda213f559cd171e99de25ae5c1f33334450772b261877e88f968715d5ca51d2609d31844ab04d6c7d7cbd9ed5bf990048bf7c7edeee3  0002-shared-qmi-do-not-abort-on-location-setup-after-unlock.patch
+4419ac70e81a0b1b12e6146ce06a4ad548b0cdd928fd52c64789d6676f9b6d8f47408ba571f5992c2bfc3bc7a280c91ae5485122e47182613c22d9759e8f9a2e  0003-qcom-soc-support-mhi_net-data-ports.patch
+d8e4cef78daaa2a6dbd3b13e66adc61674f3ec45f0c1a6145e789d953ab3ad21d51ea7566f637fc9565588b19c974b1114d905d7ea31ec8b4292e73e567dd6f4  0004-bearer-qmi-multiplex-by-default-on-mhi_net-over-QRTR.patch
+a6c3f2bc24d1e178246e037be272ea310f4c0613d3a7d5f908d81e77c10af83c67935e2a1758cbdb56c00b1dd2ffe360e4b45f528be7e441963f842999b66a1f  0005-iface-modem-simple-disconnect-only-its-own-bearers.patch
+b34c7278582c4ecd557f98a40a27e0a77bcb69f476711d1e4a9d54dcc7e5782cba63a3251daa236dda27619846809336727ab940697ccbc2ccd40e53b10d28fa  0006-bearer-qmi-do-not-ask-for-WDS-event-reports.patch
+"
