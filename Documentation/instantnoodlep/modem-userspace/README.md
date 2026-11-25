@@ -1,8 +1,8 @@
 # SDX55M userspace (OnePlus 8 Pro)
 
-State: **registration works on one unit, data untested**. With a firmware set matched to the booted slot the modem goes online and registers (LTE/5G NR); with the generic installed set it stayed offline (QMI error 52, `DeviceNotReady`). See
+State: **registration and IPv4 mobile data work on one unit**. With a firmware set matched to the booted slot the modem goes online and registers (LTE/5G NR); with the generic installed set it stayed offline (QMI error 52, `DeviceNotReady`). Data needs `CONFIG_RMNET=m` (kernel `6c71d80b5a83` or later). See
 [../STATUS.md](../STATUS.md) for the measured state. Measured on one unit only,
-kernel `7.2.0-g1a8787818fe1`, postmarketOS (Alpine, systemd).
+kernel `7.2.0-g6c71d80b5a83`, postmarketOS (Alpine, systemd), 2026-11-25.
 
 The kernel provides MHI, Sahara, QRTR and WWAN. The modem additionally needs
 userspace helpers that serve its file system requests and provision the SIM.
@@ -50,6 +50,10 @@ second person.
 
 - Run `sdx55-stage.sh stage` (see `../sdx55-stage.sh`) before the boot, so the 17 loader images come from the modem partition of the booted slot. Without it the modem stayed offline.
 - ModemManager still lists slot 2 as primary slot; the UIM primary session is slot 1 and registration works.
-- Data, SMS, calls, IMS and GNSS are untested.
+- The staging path is release specific (`/lib/firmware/updates/<kernel release>/qcom/sdx55m`). Re-run `sdx55-stage.sh stage` for every new kernel release and reboot once afterwards.
+- `rmnet` must be loaded (`modprobe rmnet`); autoload is not configured yet.
+- Mobile data, reproduced steps on the test unit: `nmcli connection add type gsm ifname '*' con-name mobile-o2 gsm.apn internet connection.autoconnect no ipv4.route-metric 900 ipv6.route-metric 900`, then `nmcli connection up mobile-o2 ifname qrtr3`. ModemManager creates `qmapmux0.0` (multiplexed). WLAN keeps the default route (metric 600), cellular is the second default route (metric 900). Verified with `ping -I qmapmux0.0 1.1.1.1` and `curl --interface qmapmux0.0 https://example.com` (HTTP 200).
+- Do not use `mmcli --simple-connect ... multiplex=none`: the bearer lands on `mhi_hwip0` and drops all packets (100 percent loss).
+- IPv6 over cellular, data across reboots, SMS, calls, IMS and GNSS are untested.
 - Keep EFS, modem firmware, calibration data and SIM identifiers out of logs and
   issues.
