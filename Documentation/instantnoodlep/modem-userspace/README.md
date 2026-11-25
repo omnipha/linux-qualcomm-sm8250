@@ -81,10 +81,10 @@ When applications require `gpsd` or a standard POSIX pseudo-terminal interface, 
   - Positioning mode: standalone GNSS (`QMI_LOC_SET_OPERATION_MODE`, 0x004a, mode 4).
   - Event registration: registered for NMEA indications (`QMI_LOC_REGISTER_EVENTS`, 0x0021, flag `0x04`).
 - **Session Lifecycle:** Continuous tracking started with 1 Hz fix interval (`QMI_LOC_START`, 0x0022). On SIGINT or SIGTERM, the client cleanly stops tracking (`QMI_LOC_STOP`, 0x0023), removes the pseudo-terminal symlink, and exits.
-- **Pseudo-Terminal (PTY) Bridge:** Creates a pseudo-terminal pair in raw mode (permissions 0666) with a symlink at `/dev/gnss-sdx55` for `gpsd`.
+- **Pseudo-Terminal (PTY) Bridge:** Creates a pseudo-terminal pair in raw mode (permissions 0666) with a symlink at `/dev/gnss-sdx55` for `gpsd` (the symlink exists only while the fallback client runs).
 - **Self-Test Option:** `python3 sdx55-gnss.py --test [seconds]` runs a standalone verification test checking discovery, session start, NMEA stream capture, fix inspection, and session stop.
-- **Integration with gpsd:** Verified with `gpsd 3.27.3-r1` (`gpsd -N -D 2 -S 2947 /dev/gnss-sdx55`). `gpsd` auto-detects driver `NMEA0183` and serves sentences via `gpspipe -r` (raw NMEA) and `gpspipe -w` (JSON TPV/SKY reports).
-- **Usage Rule:** Do not run `sdx55-gnss.py` while ModemManager holds an active GPS session to prevent conflicting requests over QRTR. The systemd unit `sdx55-gnss.service` is kept disabled by default for fallback use.
+- **Integration with gpsd:** Verified with `gpsd 3.27.3-r1` (`gpsd -N -D 2 -S 2947 /dev/gnss-sdx55`; `gpsd` is inactive by default). `gpsd` auto-detects driver `NMEA0183` and serves sentences via `gpspipe -r` (raw NMEA) and `gpspipe -w` (JSON TPV/SKY reports).
+- **Usage Rule:** Do not run `sdx55-gnss.py` while ModemManager holds an active GPS session to prevent conflicting requests over QRTR. The systemd units `sdx55-gnss.service` and `sdx55-gnss-sleep.service` are kept disabled by default for fallback use.
 
 ## Known state and limits
 
