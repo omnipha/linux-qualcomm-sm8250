@@ -21,7 +21,7 @@ What was installed on the test unit from that revision:
 | `efssave.py` | `/usr/local/bin/sdx55-efssave`, udev rule `79-sdx55-efssave.rules` | stores the EFS on devcoredump events |
 | `sdx55-sim.py` | `/usr/local/bin/sdx55-sim`, `sdx55-sim.service` | loads `mhi_net`, starts ModemManager, provisions a present USIM |
 | `modemstate.py` | `/usr/local/bin/sdx55-modemstate` | sets the modem online/offline over QMI DMS |
-| `sdx55-gnss.py` | `/usr/local/bin/sdx55-gnss`, `sdx55-gnss.service` | clean-room QMI LOC client over QRTR, streams NMEA to `/dev/gnss-sdx55` for gpsd |
+| `sdx55-gnss.py` | `/usr/local/bin/sdx55-gnss` | clean-room QMI LOC client over QRTR (fallback for gpsd to `/dev/gnss-sdx55`) |
 | rules and conf | `78-mm-sdx55-qrtr.rules`, `sdx55-mhi-net.conf`, ModemManager drop-in | port tagging, module load, MM settings |
 
 ## Patched ModemManager
@@ -49,9 +49,29 @@ second person.
 
 ## SDX55 GNSS (QMI LOC via QRTR)
 
-GNSS is implemented through a clean-room Python client, `sdx55-gnss.py`, that connects directly to the SDX55 modem's Location service (QMI LOC, service ID 16) over QRTR (`AF_QIPCRTR`).
+GNSS is available through two complementary paths: the native ModemManager integration (standard path for GeoClue and desktop applications) and a clean-room standalone client `sdx55-gnss.py` (fallback path for `gpsd`).
 
-Key protocol and architecture details:
+### 1. ModemManager Standard Path (Primary)
+
+ModemManager 1.25.95 natively drives the SDX55 Location engine over QRTR via its `qcom-soc` plugin (`qrtr3`):
+- **Capabilities:** `3gpp-lac-ci, gps-raw, gps-nmea, agps-msa, agps-msb`, SUPL server (`supl.google.com:7275`), and Qualcomm XTRA assistance support.
+- **Enabling GPS:**
+  ```sh
+  mmcli -m 0 --location-enable-gps-nmea --location-enable-gps-raw
+  mmcli -m 0 --location-set-gps-refresh-rate=1
+  ```
+- **NMEA Stream:** Standard NMEA 0183 sentences ($GPGSA, $GNGNS, $GPRMC, $GNGSA, $GPGSV, $GLGSV, $GPVTG, $GPGGA) are received from the modem and published on D-Bus (`org.freedesktop.ModemManager1.Modem.Location`, property `Location`, queryable via `mmcli -m 0 --location-get`).
+- **Disabling & Restoring:**
+  ```sh
+  mmcli -m 0 --location-disable-gps-nmea --location-disable-gps-raw
+  mmcli -m 0 --location-enable-3gpp --location-disable-agps-msb --location-set-disable-signal
+  ```
+- **GeoClue Integration:** GeoClue 2 natively consumes location updates directly from ModemManager over D-Bus (`[modem-gps]` source in `/etc/geoclue/geoclue.conf`), requiring no intermediate character device.
+- **Why gpsd Cannot Consume from ModemManager Directly:** The SDX55 on MHI/QRTR has no physical or virtual serial/TTY device nodes (`/dev/tty*`), so ModemManager does not expose a `/dev/` character device. Because `gpsd` does not have a D-Bus client backend and reads only from serial ports, PTYs, or sockets, `gpsd` cannot consume from ModemManager directly.
+
+### 2. Standalone QMI LOC Client (Fallback for gpsd)
+
+When applications require `gpsd` or a standard POSIX pseudo-terminal interface, the clean-room Python client `sdx55-gnss.py` connects directly to the SDX55 Location service (QMI LOC, service ID 16) over QRTR (`AF_QIPCRTR`):
 - **Transport & Discovery:** Uses QRTR lookup (`QRTR_TYPE_NEW_LOOKUP = 10` on `QRTR_PORT_CTRL = 0xfffffffe`) to dynamically discover the LOC service (found at node 3, port 93, instance 2).
 - **Service Configuration:**
   - Client revision: negotiated to 2 (`QMI_LOC_SERVICE_CLIENT_REVISION`, 0x0020).
@@ -61,10 +81,10 @@ Key protocol and architecture details:
   - Positioning mode: standalone GNSS (`QMI_LOC_SET_OPERATION_MODE`, 0x004a, mode 4).
   - Event registration: registered for NMEA indications (`QMI_LOC_REGISTER_EVENTS`, 0x0021, flag `0x04`).
 - **Session Lifecycle:** Continuous tracking started with 1 Hz fix interval (`QMI_LOC_START`, 0x0022). On SIGINT or SIGTERM, the client cleanly stops tracking (`QMI_LOC_STOP`, 0x0023), removes the pseudo-terminal symlink, and exits.
-- **Pseudo-Terminal (PTY) Bridge:** Creates a pseudo-terminal pair in raw mode (permissions 0666) with a symlink at `/dev/gnss-sdx55` for standard GNSS daemons like `gpsd`.
+- **Pseudo-Terminal (PTY) Bridge:** Creates a pseudo-terminal pair in raw mode (permissions 0666) with a symlink at `/dev/gnss-sdx55` for `gpsd`.
 - **Self-Test Option:** `python3 sdx55-gnss.py --test [seconds]` runs a standalone verification test checking discovery, session start, NMEA stream capture, fix inspection, and session stop.
 - **Integration with gpsd:** Verified with `gpsd 3.27.3-r1` (`gpsd -N -D 2 -S 2947 /dev/gnss-sdx55`). `gpsd` auto-detects driver `NMEA0183` and serves sentences via `gpspipe -r` (raw NMEA) and `gpspipe -w` (JSON TPV/SKY reports).
-- **Systemd Units:** On the device, the client runs under `sdx55-gnss.service` with `sdx55-gnss-sleep.service` ensuring tracking is stopped before system sleep (units stored in `phone-second-life` under `devices/mb005/modem/device-installed/`).
+- **Usage Rule:** Do not run `sdx55-gnss.py` while ModemManager holds an active GPS session to prevent conflicting requests over QRTR. The systemd unit `sdx55-gnss.service` is kept disabled by default for fallback use.
 
 ## Known state and limits
 
