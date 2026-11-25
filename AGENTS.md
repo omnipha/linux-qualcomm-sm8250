@@ -22,3 +22,8 @@ Kernel source tree for the Qualcomm Snapdragon 865 platform (`SM8250`, including
 - Follow the organization-wide [CONTRIBUTING](https://github.com/omnipha/.github/blob/main/CONTRIBUTING.md).
 - Sign commits (`git commit -s`), English commit messages.
 - Never commit or log secrets.
+
+## Branches
+
+- Develop directly on `main`. No long-lived branches.
+- A short-lived feature branch only for a larger, separate issue; merge it into `main` and delete it.
