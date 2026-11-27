@@ -47,15 +47,34 @@ Same unit (OnePlus 8 Pro IN2023), commit [1a8787818fe1](https://github.com/omnip
 
 The userspace side is described in [modem-userspace/README.md](modem-userspace/README.md).
 
+## Measured on kernel `7.2.0-ga6e6be3303c6` (2026-11-27)
+
+Same unit (OnePlus 8 Pro IN2023, `instantnoodlep`), commit [a6e6be3303c6](https://github.com/omnipha/linux-qualcomm-sm8250/commit/a6e6be3303c6a2e91030459e77f692023e13fcf4), boot ID `17ec80f1-60f6-405a-b613-2202c0b11a85`, cold boot from `boot_b`, postmarketOS-based root filesystem. Only what was observed on this boot is listed.
+
+| Component | Observed status |
+| --- | --- |
+| Remote processors | `adsp`, `cdsp`, `slpi` running. SLPI (`remoteproc0`) stopped and restarted cleanly without crash loop. |
+| Accelerometer | Verified live with `ssccli --sensor accelerometer` and `monitor-sensor`. Measured values: $X \approx 0.81\,\text{m/s}^2$, $Y \approx 0.93\,\text{m/s}^2$, $Z \approx 9.85\,\text{m/s}^2$; tilt detection reports `face-up`. |
+| Gyroscope | Verified live via `libssc`. Measured values: $X \approx -0.0139\,\text{rad/s}$, $Y \approx -0.0067\,\text{rad/s}$, $Z \approx 0.0027\,\text{rad/s}$. |
+| Ambient Light | Verified live with `ssccli --sensor light` and `monitor-sensor`. Measured values: $\approx 358 - 371\,\text{Lux}$. |
+| Proximity | Verified live with `ssccli --sensor proximity` and `monitor-sensor`. Reports `FAR` (binary state `0`). |
+| Magnetometer / Compass | Unverified / Unavailable. SLPI queries `/odm/etc/sensor/config` (mapped in `hexagonrpcd`), but sensor discovery does not publish `mag` / `magnetic_field`. `ssccli` reports `Unable to initialize magnetometer sensor: UNKNOWN` and `monitor-sensor` reports `No compass`. |
+| Additional SSC Algorithms | `gravity`, `game_rv`, `tilt`, `amd` (absolute motion detector), `rmd` (relative motion detector) are active and responsive via `libssc`. |
+| `iio-sensor-proxy` | Active with udev rule override (`/etc/udev/rules.d/80-iio-sensor-proxy.rules`), exposing accelerometer, ambient light, and proximity over D-Bus to `monitor-sensor` and desktop shell. |
+| SDX55M Modem | Mobile data connection verified over `qmapmux0.0` (`ping -I qmapmux0.0 1.1.1.1` 0% packet loss, 53-62 ms round-trip time). Runtime PM set to `on`. |
+
+Detailed SSC sensor setup and architecture are documented in [sensors.md](sensors.md).
+
 ## Known open issues
 
 - GPU devfreq thermal cooling was disabled in the kernel config; a source fix (`CONFIG_DEVFREQ_THERMAL=y`) was merged in `8cd047b96e1e` on 2026-11-21 and [#1](https://github.com/omnipha/linux-qualcomm-sm8250/issues/1) is closed; on-device verification still requires flashing the new kernel.
 - Per-task I/O accounting was disabled in the kernel config, so `/proc/self/io` was unavailable; a source fix (`CONFIG_TASKSTATS=y`, `CONFIG_TASK_XACCT=y`, `CONFIG_TASK_IO_ACCOUNTING=y`) was merged in `9763e16ad036` on 2026-11-21 and [#2](https://github.com/omnipha/linux-qualcomm-sm8250/issues/2) is closed; on-device verification still requires flashing the new kernel.
 - The RTC cannot store time on this kernel; `hwclock --systohc` fails with `ENODEV`. A source fix (PM8150 SDAM2 offset cell, `CONFIG_NVMEM_SPMI_SDAM=y`) was merged in `7e5c7b1ce280` on 2026-11-20 and [#3](https://github.com/omnipha/linux-qualcomm-sm8250/issues/3) is closed; on-device verification still requires flashing the new DTB.
 - The SDX55M modem reaches Mission Mode and registers on the home network on this unit with `1a8787818fe1` plus a matched firmware set (see above). IPv4 mobile data works on this unit with `6c71d80b5a83` (see above). [#4](https://github.com/omnipha/linux-qualcomm-sm8250/issues/4) is closed: Mission Mode, WWAN ports, registration and IPv4 data are measured on this unit; the resume failure above is documented, any new modem problem gets a new issue. GNSS is tracked in [#11](https://github.com/omnipha/linux-qualcomm-sm8250/issues/11) (userspace QMI LOC client `sdx55-gnss.py` verified with NMEA and gpsd indoors; outdoor fix and suspend/resume remain open).
+- SSC sensors (accelerometer, gyroscope, light, proximity) are verified live on this unit with `a6e6be3303c6` ([#6](https://github.com/omnipha/linux-qualcomm-sm8250/issues/6)). Magnetometer / compass remains unverified / unavailable.
 
 ## Not verified
 
-- Sensors (accelerometer, gyroscope, magnetometer, light, proximity) do not work.
+- Magnetometer / compass is unverified / unavailable via SSC.
 - Camera hardware (IMX689, IMX586, IMX471, S5K3M5, GC5035 and focus actuators) is present in the device tree and its drivers are built, but capture, camera GUI and image quality are not verified; a device tree and a compiled driver are not proof of a working camera.
 - Suspend/resume, SMS, calls and NFC are unverified. Mobile data is verified for IPv4 on one unit only. GNSS has indoor NMEA reception verified, but no outdoor fix.
