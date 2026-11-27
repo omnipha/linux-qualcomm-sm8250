@@ -281,7 +281,8 @@
 	/* Values from the vendor device tree overlay of project 19811 */
 	sensor-devinfo {
 		compatible = "oneplus,sensor-devinfo";
-		/* The SLPI firmware of this phone reads the 3-source layout */
+		/* The SLPI firmware of this phone reads the 2-source layout */
+		oneplus,sources-per-sensor = <2>;
 
 		/* LSM6DSM */
 		gsensor-0 {
