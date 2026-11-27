@@ -331,8 +331,8 @@ static int oneplus_sensor_devinfo_probe(struct platform_device *pdev)
 
 	/*
 	 * Older bootloaders create the item themselves, in the layout their
-	 * firmware reads. Otherwise create it, by default in the layout of
-	 * newer firmware. Either way the size tells the layout.
+	 * firmware reads. Otherwise create it, in the layout named by
+	 * oneplus,sources-per-sensor or by default in the 3-chip layout.
 	 */
 	if (!of_property_read_u32(dev->of_node, "oneplus,sources-per-sensor", &n_sources) &&
 	    n_sources != 2 && n_sources != 3)
@@ -352,13 +352,16 @@ static int oneplus_sensor_devinfo_probe(struct platform_device *pdev)
 		return dev_err_probe(dev, PTR_ERR(di.info), "failed to get SMEM item\n");
 
 	di.n_algorithms = SENSOR_ALGO_NUM;
-	if (size == info_size(3, SENSOR_ALGO_NUM)) {
-		di.n_sources = 3;
-	} else if (size == info_size(2, SENSOR_ALGO_NUM)) {
-		di.n_sources = 2;
-	} else if (size == info_size(2, SENSOR_ALGO_NUM_LEGACY)) {
+	if ((!n_sources || n_sources == 2) &&
+	    size == info_size(2, SENSOR_ALGO_NUM_LEGACY)) {
 		di.n_sources = 2;
 		di.n_algorithms = SENSOR_ALGO_NUM_LEGACY;
+	} else if (n_sources && size >= info_size(n_sources, SENSOR_ALGO_NUM)) {
+		di.n_sources = n_sources;
+	} else if (!n_sources && size == info_size(3, SENSOR_ALGO_NUM)) {
+		di.n_sources = 3;
+	} else if (!n_sources && size == info_size(2, SENSOR_ALGO_NUM)) {
+		di.n_sources = 2;
 	} else {
 		return dev_err_probe(dev, -EINVAL, "unexpected SMEM item size %zu\n", size);
 	}
