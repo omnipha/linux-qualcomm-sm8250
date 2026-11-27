@@ -47,21 +47,21 @@ Same unit (OnePlus 8 Pro IN2023), commit [1a8787818fe1](https://github.com/omnip
 
 The userspace side is described in [modem-userspace/README.md](modem-userspace/README.md).
 
-## Measured on kernel `7.2.0-ga6e6be3303c6` (2026-11-27)
+## Measured on kernel `7.2.0-ga9a912406fd2` (2026-11-27)
 
-Same unit (OnePlus 8 Pro IN2023, `instantnoodlep`), commit [a6e6be3303c6](https://github.com/omnipha/linux-qualcomm-sm8250/commit/a6e6be3303c6a2e91030459e77f692023e13fcf4), boot ID `17ec80f1-60f6-405a-b613-2202c0b11a85`, cold boot from `boot_b`, postmarketOS-based root filesystem. Only what was observed on this boot is listed.
+Same unit (OnePlus 8 Pro IN2023, `instantnoodlep`), commit [a9a912406fd2](https://github.com/omnipha/linux-qualcomm-sm8250/commit/a9a912406fd2), boot ID `afecbd69-0b00-4944-8356-1d2862215e93`, cold boot from `boot_b`, postmarketOS-based root filesystem. Only what was observed on this boot is listed.
 
 | Component | Observed status |
 | --- | --- |
-| Remote processors | `adsp`, `cdsp`, `slpi` running. SLPI (`remoteproc0`) stopped and restarted cleanly without crash loop. |
-| Accelerometer | Verified live with `ssccli --sensor accelerometer` and `monitor-sensor`. Measured values: $X \approx 0.81\,\text{m/s}^2$, $Y \approx 0.93\,\text{m/s}^2$, $Z \approx 9.85\,\text{m/s}^2$; tilt detection reports `face-up`. |
-| Gyroscope | Verified live via `libssc`. Measured values: $X \approx -0.0139\,\text{rad/s}$, $Y \approx -0.0067\,\text{rad/s}$, $Z \approx 0.0027\,\text{rad/s}$. |
-| Ambient Light | Verified live with `ssccli --sensor light` and `monitor-sensor`. Measured values: $\approx 358 - 371\,\text{Lux}$. |
+| Remote processors | `adsp`, `cdsp`, `slpi` running. SLPI (`remoteproc0`) booted cleanly and remained stable without watchdog bites or crash loop across observation window. |
+| Accelerometer | Verified live with `ssccli --sensor accelerometer` and `monitor-sensor`. Measured values: $X \approx 0.58 - 0.60\,\text{m/s}^2$, $Y \approx 0.43 - 0.45\,\text{m/s}^2$, $Z \approx 9.89 - 9.92\,\text{m/s}^2$; tilt detection reports `face-up`. |
+| Gyroscope | Verified live via `ssccli --sensor gyroscope` and `libssc`. Measured values: $X \approx -0.0127 - -0.0139\,\text{rad/s}$, $Y \approx -0.0043 - -0.0055\,\text{rad/s}$, $Z \approx 0.0027 - 0.0039\,\text{rad/s}$. |
+| Ambient Light | Verified live with `ssccli --sensor light` and `monitor-sensor`. Measured values: $\approx 350 - 360\,\text{Lux}$. |
 | Proximity | Verified live with `ssccli --sensor proximity` and `monitor-sensor`. Reports `FAR` (binary state `0`). |
-| Magnetometer / Compass | **Verified Live** via `ssccli -v --sensor magnetometer` and `monitor-sensor --compass` (MMC5603). Measured field: $X \approx 123.7 - 124.6\,\mu\text{T}$, $Y \approx -15.9 - -17.3\,\mu\text{T}$, $Z \approx 81.3 - 83.0\,\mu\text{T}$. Compass heading: $\approx 284.8^\circ - 285.7^\circ$. Root cause: SMEM item 130 sensor layout required 2 sources per sensor (stride 372 bytes, placing mag at offset 748). Fixed in `2620e8e643a6` and `a9a912406fd2`. |
+| Magnetometer / Compass | **Verified Live** via `ssccli -v --sensor magnetometer` and `monitor-sensor --compass` (MMC5603). Measured field: $X \approx 121.0 - 122.4\,\mu\text{T}$, $Y \approx -18.9 - -19.7\,\mu\text{T}$, $Z \approx 78.0 - 79.8\,\mu\text{T}$. Compass heading: $\approx 285.0^\circ$. Root cause: SMEM item 130 sensor layout required 2 sources per sensor (stride 372 bytes, placing mag at offset 748). Fixed in `2620e8e643a6` and `a9a912406fd2`. |
 | Additional SSC Algorithms | `gravity`, `game_rv`, `tilt`, `amd` (absolute motion detector), `rmd` (relative motion detector) are active and responsive via `libssc`. |
-| `iio-sensor-proxy` | Active with udev rule override (`/etc/udev/rules.d/80-iio-sensor-proxy.rules`), exposing accelerometer, ambient light, and proximity over D-Bus to `monitor-sensor` and desktop shell. |
-| SDX55M Modem | Mobile data connection verified over `qmapmux0.0` (`ping -I qmapmux0.0 1.1.1.1` 0% packet loss, 53-62 ms round-trip time). Runtime PM set to `on`. |
+| `iio-sensor-proxy` & `hexagonrpcd` persistence | Persistent across reboots: `hexagonrpcd-sdsp.service` enabled with `-w /var/lib/hexagonrpcd/sensors-registry`, aliased to `hexagonrpcd.service`, and triggered on device arrival via udev rule `/etc/udev/rules.d/80-hexagonrpcd.rules`. `iio-sensor-proxy` udev override (`/etc/udev/rules.d/80-iio-sensor-proxy.rules`) exposes accelerometer, ambient light, proximity, and compass. |
+| SDX55M Modem | Mobile data connection verified over `qmapmux0.0` (`ping -I qmapmux0.0 1.1.1.1` 0% packet loss, 44-64 ms round-trip time). Runtime PM set to `on`. |
 
 Detailed SSC sensor setup and architecture are documented in [sensors.md](sensors.md).
 

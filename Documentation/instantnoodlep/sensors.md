@@ -63,6 +63,14 @@ The following patches (from the reference OnePlus 8 Pro port) are required:
 - **0004 & 0005 (Writable persist registry)**: Adds `-w <dir>` support to allow SLPI to read and write runtime calibration data into a writable directory (`/var/lib/hexagonrpcd/sensors-registry`).
 - **ODM path mapping**: Maps `/odm/etc/sensor/config` to `/usr/share/qcom/sm8250/OnePlus/instantnoodlep/sensors/config` in `rpcd_builder.c`, matching vendor firmware paths queried by the SLPI Kona DSP image.
 
+To survive reboot:
+- The systemd unit is enabled (`systemctl enable hexagonrpcd-sdsp.service`) with a drop-in override (`/etc/systemd/system/hexagonrpcd-sdsp.service.d/override.conf`) configuring `-w /var/lib/hexagonrpcd/sensors-registry`.
+- A symlink alias `/etc/systemd/system/hexagonrpcd.service` is provided for standard service resolution.
+- A udev rule (`/etc/udev/rules.d/80-hexagonrpcd.rules`) triggers service start on `/dev/fastrpc-sdsp` device node creation:
+  ```udev
+  SUBSYSTEM=="misc", KERNEL=="fastrpc-sdsp*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="hexagonrpcd-sdsp.service"
+  ```
+
 ### 2. Registry and Configuration Layout
 
 Configuration files staged from vendor and odm partitions:
@@ -81,19 +89,19 @@ Configuration files staged from vendor and odm partitions:
 
 ## Measured Live Verification
 
-Measured on **OnePlus 8 Pro IN2023 (`instantnoodlep`)** on **2026-11-27**, running kernel **`7.2.0-ga6e6be3303c6`** (commit `a6e6be3303c6a2e91030459e77f692023e13fcf4`):
+Measured on **OnePlus 8 Pro IN2023 (`instantnoodlep`)** on **2026-11-27**, running kernel **`7.2.0-ga9a912406fd2`** (commit `a9a912406fd2`, boot ID `afecbd69-0b00-4944-8356-1d2862215e93`):
 
 | Sensor | Status | Method / Tool | Measured Values & Units |
 | --- | --- | --- | --- |
-| **Accelerometer** | **Verified Live** | `ssccli --sensor accelerometer`<br>`monitor-sensor` | $X \approx 0.81\,\text{m/s}^2$, $Y \approx 0.93\,\text{m/s}^2$, $Z \approx 9.85\,\text{m/s}^2$<br>Tilt: `face-up` |
-| **Ambient Light** | **Verified Live** | `ssccli --sensor light`<br>`monitor-sensor` | $\approx 358 - 371\,\text{Lux}$ |
+| **Accelerometer** | **Verified Live** | `ssccli --sensor accelerometer`<br>`monitor-sensor` | $X \approx 0.58 - 0.60\,\text{m/s}^2$, $Y \approx 0.43 - 0.45\,\text{m/s}^2$, $Z \approx 9.89 - 9.92\,\text{m/s}^2$<br>Tilt: `face-up` |
+| **Ambient Light** | **Verified Live** | `ssccli --sensor light`<br>`monitor-sensor` | $\approx 350 - 360\,\text{Lux}$ |
 | **Proximity** | **Verified Live** | `ssccli --sensor proximity`<br>`monitor-sensor` | Status: `FAR`<br>Near state: `0` |
-| **Gyroscope** | **Verified Live** | `libssc` client | $X \approx -0.0139\,\text{rad/s}$, $Y \approx -0.0067\,\text{rad/s}$, $Z \approx 0.0027\,\text{rad/s}$ |
-| **Magnetometer / Compass** | **Verified Live** | `ssccli -v --sensor magnetometer`<br>`monitor-sensor --compass` | $X \approx 123.7 - 124.6\,\mu\text{T}$, $Y \approx -15.9 - -17.3\,\mu\text{T}$, $Z \approx 81.3 - 83.0\,\mu\text{T}$<br>Compass heading: $\approx 284.8^\circ - 285.7^\circ$ (MMC5603). |
+| **Gyroscope** | **Verified Live** | `ssccli --sensor gyroscope`<br>`libssc` client | $X \approx -0.0127 - -0.0139\,\text{rad/s}$, $Y \approx -0.0043 - -0.0055\,\text{rad/s}$, $Z \approx 0.0027 - 0.0039\,\text{rad/s}$ |
+| **Magnetometer / Compass** | **Verified Live** | `ssccli -v --sensor magnetometer`<br>`monitor-sensor --compass` | $X \approx 121.0 - 122.4\,\mu\text{T}$, $Y \approx -18.9 - -19.7\,\mu\text{T}$, $Z \approx 78.0 - 79.8\,\mu\text{T}$<br>Compass heading: $\approx 285.0^\circ$ (MMC5603). |
 | **Additional SSC Algorithms** | **Active** | `libssc` discovery | `gravity`, `game_rv`, `tilt`, `amd` (absolute motion detector), `rmd` (relative motion detector) are registered and responsive. |
 
 ### Stability
 
 SLPI remote processor (`remoteproc0`) remained stable under continuous sensor polling and clean stop/start cycles:
 - State verified via `/sys/class/remoteproc/remoteproc0/state` (`running`).
-- No DSP watchdog bites, kernel panics, or crash loops observed.
+- No DSP watchdog bites, kernel panics, or crash loops observed across observation window.
