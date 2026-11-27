@@ -47,7 +47,8 @@ Rather than registering individual sensors as direct Linux kernel I2C/SPI client
 - **FastRPC:** `CONFIG_RPMSG_CHAR=m`, `CONFIG_QUALCOMM_FASTRPC=m` providing `/dev/fastrpc-sdsp`.
 - **Devicetree & Driver Support:**
   - FastRPC suspend/resume fixes (preventing system lockup during remote processor suspend transitions).
-  - `oneplus-sensor-devinfo` driver providing device hardware ID and sensor orientation metadata via sysfs.
+  - `oneplus-sensor-devinfo` driver providing device hardware ID and sensor orientation metadata via sysfs and initializing SMEM item 130.
+  - SMEM item 130 sensor layout requires `oneplus,sources-per-sensor = <2>;` (vector stride 372 bytes / 0x174) so that sensor type 2 (MMC5603 magnetometer) is located at offset 748, matching SLPI Kona DSP firmware expectations. Fixed in `2620e8e643a6` and `a9a912406fd2`.
 
 ## Userspace Implementation & Staging
 
@@ -88,7 +89,7 @@ Measured on **OnePlus 8 Pro IN2023 (`instantnoodlep`)** on **2026-11-27**, runni
 | **Ambient Light** | **Verified Live** | `ssccli --sensor light`<br>`monitor-sensor` | $\approx 358 - 371\,\text{Lux}$ |
 | **Proximity** | **Verified Live** | `ssccli --sensor proximity`<br>`monitor-sensor` | Status: `FAR`<br>Near state: `0` |
 | **Gyroscope** | **Verified Live** | `libssc` client | $X \approx -0.0139\,\text{rad/s}$, $Y \approx -0.0067\,\text{rad/s}$, $Z \approx 0.0027\,\text{rad/s}$ |
-| **Magnetometer / Compass** | **Unverified / Unavailable** | `ssccli --sensor magnetometer`<br>`monitor-sensor --compass` | Sensor discovery reports `Unable to initialize magnetometer sensor: UNKNOWN` and `No compass`. SLPI does not publish `mag` / `magnetic_field` sensor types. |
+| **Magnetometer / Compass** | **Verified Live** | `ssccli -v --sensor magnetometer`<br>`monitor-sensor --compass` | $X \approx 123.7 - 124.6\,\mu\text{T}$, $Y \approx -15.9 - -17.3\,\mu\text{T}$, $Z \approx 81.3 - 83.0\,\mu\text{T}$<br>Compass heading: $\approx 284.8^\circ - 285.7^\circ$ (MMC5603). |
 | **Additional SSC Algorithms** | **Active** | `libssc` discovery | `gravity`, `game_rv`, `tilt`, `amd` (absolute motion detector), `rmd` (relative motion detector) are registered and responsive. |
 
 ### Stability
